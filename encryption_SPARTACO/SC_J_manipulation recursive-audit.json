@@ -1,0 +1,28 @@
+{
+  "cuerpo": {
+    "esquema": 1,
+    "version": 1,
+    "emitido": "2026-10-12T22:58:03Z",
+    "artifact_id": "ART-55e5b4d05b36536bee31e9dd",
+    "clave_publica_id": "ed25519:0f63a34dce0fba561495b5ce16d5373875d666cf55e77c45dd494fb7eb291093",
+    "algoritmo_hash": "SHA-256",
+    "algoritmo_firma": "Ed25519",
+    "nucleo": "4b8a7c47ce90755fac539f16eac2dcc016ec0b6e0d96177af0a8df211514dde3",
+    "S": "3eb5d7aa84707590f98974f5ff3d0f6d06c789be27359f71fc1dfb441398fd19",
+    "Q": "30bfad5938d54c169f033df6d02f2f1ca2e9d054ea7233fe86ca4076f535ecfa",
+    "n_bytes": 858936,
+    "n_neutro": 3,
+    "valuaciones": [
+      0,
+      1,
+      0,
+      0,
+      1,
+      0,
+      1,
+      0
+    ],
+    "identidad_neutra": true
+  },
+  "firma": "2f4bc2e3fc01efa30ef9a9f8b6c7377f552649ed4c0eb6c854c4684fa4dc469db7b967a614807b40ff7ede64d4506f6f258ba8dcd56219660594e91728dbc908"
+}
