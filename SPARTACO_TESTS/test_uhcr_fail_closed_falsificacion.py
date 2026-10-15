@@ -1,66 +1,286 @@
-# ================================================================
-# UHCR — AUDITOR DINAMICO DE SUPERFICIE FAIL-CLOSED (v5)
+# ===========================================================================
+# UHCR — DYNAMIC FAIL-CLOSED SYSTEM SURFACE AUDITOR (v5)
+# tests/test_uhcr_fail_closed_falsificacion.py
 # SPEC: UHCR-FAIL-CLOSED-1.2-SYSTEM-SURFACE
-# SPEC_EVOLUTION: 1.2+monotonic-attribution+ablation-universal+run-scoped-evidence+zero-gate-mutation+ablation-complete-gates+troyano-sintetico-ataque-real+ablation-auditor-complete+cascade-deps+causal-frontier-dag+positive-witness+eq-ep-separation+producer-ablation+decision-taxonomy-4+falsification-verification+stimulus-established+dag-merge-evidence+coverage-unique-dims+selection-id-hardcoding-scope+auditor-withheld-on-fail+falsification-incomplete-detail+exceptions-recount-consistent+semantic-contract-falsification
-# Evolucion monotona: solo anade campos de evidencia/atribucion;
-# no elimina mecanismos ni capacidades de la base 1.2.
-# +ablation-universal: resolucion de modulo/gate es regla UNIVERSAL del
-# instrumento (forall m in ProductionSurface: Remove(m) =/> AuditorCrash).
-# TargetFailure != InstrumentFailure. AST-first + resolve fail-closed.
-# Maquina de estados (evidencia):
-#   DISCOVERED -> {AVAILABLE, ABSENT, IMPORT_FAILED, CAPABILITY_ABSENT}
-#             -> {AUDITED, NOT_APPLICABLE, NOT_QUALIFIED, UNACCOUNTED}
-# Se conservan: APPLICABILITY_NOT_DETERMINED, NO_SEGURIDAD_DECLARED,
-# APPLICABLE, IMPORT_FAILED.
+# ===========================================================================
 #
-# TEOREMA EMBEBIDO
-# -----------------
-# Propiedad generalizada (no solo ALLOW/DENY):
+# THESIS
+# ---------------------------------------------------------------------------
+# This file is the most evolved version of the UHCR dynamic fail-closed
+# surface auditor. It does not audit an isolated module: it walks the
+# entire system surface — core/ plus modules/ — discovers every
+# decision frontier by structural shape, and runs falsification
+# campaigns against each of them until each is either qualified or
+# explicitly declared not qualifiable. The output is not a single
+# PASS/FAIL: it is a hierarchical record where the instrument, the
+# coverage, the property and the production result are each declared
+# on their own account, and none of them covers another.
 #
-#   FC(D,G) := forall g in G, forall x,
-#              not Precondition_g(x)  =>  not ProtectedEffect_g(x)
+# EMBEDDED THEOREM
+# ---------------------------------------------------------------------------
+# The generalized fail-closed property is:
 #
-# E_protegido puede ser: autorizar, abrir un recurso, emitir una
-# credencial, liberar material, establecer una vinculacion o ejecutar
-# una transicion privilegiada. La semantica procede de la FORMA del
-# contrato descubierto, jamas de una lista manual de nombres.
+#     FC(D, G) := forall g in G, forall x,
+#                 not Precondition_g(x) => not ProtectedEffect_g(x)
 #
-# COUNTEREXAMPLE := exists g,x : not V_g(x) and ProtectedEffect_g(x)
+#     COUNTEREXAMPLE := exists g, x :
+#                       not V_g(x) and ProtectedEffect_g(x)
 #
-# REGLA CENTRAL (metrologia)
-# --------------------------
-#   REPORT = f(EVIDENCE)
+# The protected effect may be: authorize, open a resource, issue a
+# credential, release material, establish a binding, or execute a
+# privileged transition. The semantics come from the SHAPE of the
+# discovered contract, never from a manual list of names.
 #
-# El reportero no tiene permiso epistemico para conocer el resultado
-# antes de ejecutar. Ningun numero, nombre, cantidad o veredicto de
-# resultado esta escrito a mano: todo se deriva en runtime del
-# expediente de ESA corrida. La conclusion no se programa; se programa
-# el criterio para que la evidencia determine la conclusion.
+# EPISTEMOLOGICAL RULE
+# ---------------------------------------------------------------------------
+#     REPORT = f(EVIDENCE)
 #
-# NIVELES DE CONCLUSION (derivables, ninguno prohibido de antemano)
+# The reporter has no epistemic permission to know the result before
+# running. No number, name, count or verdict of result is written by
+# hand: everything is derived at runtime from the record of THIS run.
+# The conclusion is not programmed; the criterion is programmed so the
+# evidence determines the conclusion.
+#
+# CONCLUSION LEVELS (derived, none pre-blocked)
+# ---------------------------------------------------------------------------
 #   COUNTEREXAMPLE_OBSERVED
 #   NO_COUNTEREXAMPLE_IN_QUALIFIED_TESTED_DOMAIN
-#   PROPERTY_SUPPORTED_FOR_EXHAUSTIVE_FINITE_DOMAIN   (T = X)
+#   PROPERTY_SUPPORTED_FOR_EXHAUSTIVE_FINITE_DOMAIN  (T = X)
 #   INSUFFICIENT_EVIDENCE
 #   INSTRUMENT_NOT_QUALIFIED
 #
-# REGLAS EPISTÉMICAS
-# ------------------
-# 1. AUTO-DISCOVERY != AUTO-TRUST.
-# 2. No se hardcodean nombres de modulos/funciones de produccion en la
-#    seleccion de fronteras; se PRUEBA por AST del propio archivo.
-# 3. Los adaptadores se seleccionan por FORMA de firma/objetos runtime.
-# 4. Evidencia favorable y desfavorable se registra SIMETRICAMENTE.
-# 5. auditor_integrity es DERIVADA de condiciones independientes,
-#    incluidos los mutantes del propio auditor.
-# 6. EXCEPTION no es ALLOW ni DENY: familia OPERACION, registrada aparte.
-# 7. Sólo decision positiva observada bajo precondicion falsificada es
-#    COUNTEREXAMPLE.
-# 8. NOT_APPLICABLE no puede ser el cajon de lo no sabido: si la
-#    aplicabilidad no se pudo determinar, es APPLICABILITY_NOT_DETERMINED.
-# 9. Un PASS global jamas puede esconder una frontera incompleta:
-#    cualificacion exhaustiva por frontera.
-# ================================================================
+# Bias is forbidden in BOTH directions: the auditor must be able to
+# refute on a single counterexample AND to grant the claim when a
+# finite declared domain is exhaustively enumerated with a qualified
+# oracle.
+#
+# RESOLUTION STATE MACHINE (published in evidence)
+# ---------------------------------------------------------------------------
+#   DISCOVERED
+#     -> {AVAILABLE, ABSENT, IMPORT_FAILED, CAPABILITY_ABSENT}
+#     -> {AUDITED, NOT_APPLICABLE, NOT_QUALIFIED, UNACCOUNTED}
+#
+# DISCOVERY
+# ---------------------------------------------------------------------------
+# AST-first, then controlled resolution. Never raises on ImportError:
+# a module that cannot be imported is a component in IMPORT_FAILED
+# state, recorded without killing the audit. A capability declared in
+# SEGURIDAD without a live callable is a CAPABILITY_ABSENT, also
+# recorded. TargetFailure != InstrumentFailure is the axis of the
+# whole doctrine.
+#
+# ADAPTERS (selected by STRUCTURAL SHAPE, never by production name)
+# ---------------------------------------------------------------------------
+#   POLICY_SHAPED             identity / resource / operation /
+#                             permissions / rules
+#   COMPOSITE_CHECKS_SHAPED   request_id / context_id / resource_id /
+#                             operation / checks
+#   POSTCONDITION_SHAPED      pre / operation / resource_id /
+#                             context_id / postcondition_ok
+#
+# DECISION ORACLE
+# ---------------------------------------------------------------------------
+# Recognizes boolean fields (ok, allowed, authorized, autorizado) and
+# status fields (decision, estado, status, verdict). If two recognized
+# fields contradict, it returns AMBIGUOUS_DECISION_SHAPE with positive
+# None. A silent boolean would lose information that nobody could
+# recover afterwards. Ambiguity is published, not collapsed.
+#
+# OBSERVATION TAXONOMY (four mandatory categories)
+# ---------------------------------------------------------------------------
+#   ALLOW_OBSERVED
+#   DENY_OBSERVED
+#   EXCEPTION_OBSERVED
+#   DECISION_NOT_OBSERVABLE
+#
+# EXCEPTION is neither ALLOW nor DENY: family OPERATION, recorded
+# separately, counted separately, never as a counterexample.
+#
+# E_P / E_Q SEPARATION
+# ---------------------------------------------------------------------------
+# E_P   production evidence: cases executed against frontiers actually
+#       discovered in core/ and modules/.
+# E_Q   qualification evidence: the synthetic trojan the auditor
+#       plants, executes and removes, proving the auditor can detect a
+#       known fail-open.
+#
+# The two sets are disjoint by construction. Trojan counterexamples do
+# not inflate production metrics. The instrument does not self-approve
+# by injecting its own synthetic cases.
+#
+# ABLATION CAMPAIGN (universal)
+# ---------------------------------------------------------------------------
+#     forall m : Ablate(m) => AuditorComplete
+#                            & AbsenceDetected
+#                            & RemainingSurfaceMeasured
+#
+# Every discovered module is temporarily renamed, the module cache is
+# cleared, discovery is re-run, and three things are verified: the
+# auditor survives in all four stages (discovery, resolution,
+# campaigns, report), the absence is detected, and the surviving
+# surface is still measured. The module is then restored. Gate
+# ablation does the same for every gate attribute. Producer ablation
+# removes a POSTCONDITION producer and verifies the dependent target
+# becomes POSITIVE_CONTROL=UNAVAILABLE / TARGET_STATUS=NOT_QUALIFIED
+# while the auditor remains alive.
+#
+# MUTATION TEST OF THE AUDITOR
+# ---------------------------------------------------------------------------
+# The evidence is copied, mutated to simulate specific forms of
+# sabotage, and the integrity derivation must mark each mutation as
+# failure:
+#
+#   DROP_SECURITY_RESOURCE
+#   SKIP_ONE_GATE
+#   SKIP_NEGATIVE_CASE
+#   FAKE_POSITIVE_CONTROL
+#   EXCEPTION_AS_DENY
+#   UNKNOWN_AS_DENY
+#   COUNTEREXAMPLE_AS_EXCEPTION
+#   PROTECTED_EFFECT_ALWAYS_FALSE
+#   ORACLE_ACCEPT_ALL
+#   ORACLE_INVERT_DECISION
+#   DECISION_ALWAYS_NONE
+#   ORACLE_AMBIGUITY_BLIND
+#
+# mutation_sensitivity_proven is a mandatory condition for the auditor
+# to declare itself qualified.
+#
+# SEMANTIC CONTRACT LAYER (¬I_X => ¬E_X)
+# ---------------------------------------------------------------------------
+# Audit unit = Active asset + invariant + frontier + effect. The
+# universal property is ¬I_X ⇒ ¬E_X. A semantic counterexample
+# requires CompromiseVerified ∧ ExecutionObserved ∧
+# ProtectedEffectObserved. SEGURIDAD declaration is NEVER the decision
+# oracle: it is only discovery surface. Frontier resolution accepts an
+# explicit `frontera` field, a NAME_MATCH by active/effect/invariant
+# tokens against public callables, or a unique structural match. If
+# none of those resolve, the state is SEMANTIC_FRONTIER_NOT_RESOLVED
+# and it is published without inventing a frontier.
+#
+# DEPENDENCY DAG
+# ---------------------------------------------------------------------------
+# Edges are inferred from four independent sources:
+#   SIGNATURE    `pre` parameter with an annotation matching another
+#                gate's return
+#   ANNOTATION   parameter annotation matching a return annotation
+#   SEGURIDAD    declared order with _precheck before _postcheck
+#   EXPERIMENT   edges observed empirically while freezing the positive
+#                witness
+# Edges are merged by (from, to) and basis accumulates all sources as
+# SIGNATURE+ANNOTATION+SEGURIDAD+EXPERIMENT. No production names in
+# the source: everything is derived from shape.
+#
+# POSITIVE WITNESS
+# ---------------------------------------------------------------------------
+# A frozen artifact documenting the exact construction of the positive
+# initial state: producer, producer decision, target, target decision,
+# hashes of operation / resource_id / context_id, construction trace,
+# and the hash of the complete input. Every negative case of the same
+# gate references this witness, so all subsequent falsifications start
+# from the same established state. Without a frozen witness there is
+# no POSITIVE_CONTROL, and without POSITIVE_CONTROL the gate remains
+# POSITIVE_CONTROL_UNAVAILABLE, not NOT_QUALIFIED in disguise.
+#
+# DEFENSE HANDOFF
+# ---------------------------------------------------------------------------
+# A comparison axis between the local result of the gate and the
+# system result. If LOCAL=DEFENDED but SYSTEM=NOT_DEFENDED, an
+# observable handoff exists where one component defended and another
+# did not. Without divergence, handoff is published as observed=false
+# and the steps document the single observed step. The chain of
+# defense cannot be asserted without multi-step evidence.
+#
+# MONITOREO CORRELATION (independent sensor)
+# ---------------------------------------------------------------------------
+# While UHCR falsifies, the monitoreo module observes. For every
+# executed case, UHCR calls M.gancho(module, gate, output) and compares
+# the monitor's decision against the UHCR oracle's decision.
+# Convergent evidence counts; divergence is published, never hidden.
+#
+# COVERAGE (three independent axes)
+# ---------------------------------------------------------------------------
+#   coverage_execution      executed / generated cases
+#   coverage_surface        applicable resources / SEGURIDAD-declared
+#   coverage_preconditions  falsified dimensions / discovered
+#                           dimensions (micro-average over qualified
+#                           gates)
+# The three numbers are published separately because they measure
+# different gaps.
+#
+# BACKWARD COMPATIBILITY
+# ---------------------------------------------------------------------------
+# Reads the prior record from disk and computes LostEvidence. Without a
+# prior, NO_PRIOR_BASELINE is declared without inventing floors. With a
+# prior whose identity does not match, the artifact is STALE_EVIDENCE
+# and is archived to historical_runs/ before the new one is written.
+# With a matching prior, cases, gates, resources and mutants are
+# compared and no loss is allowed. No magic numbers in source: the
+# floors are derived from the on-disk record.
+#
+# VERDICT HIERARCHY
+# ---------------------------------------------------------------------------
+#   INSTRUMENT_QUALIFICATION
+#       integrity reasons + mutation sensitivity + hardcoding
+#       self-audit + dynamic adaptation
+#   SYSTEM_COVERAGE
+#       surface and precondition coverage
+#   FAIL_CLOSED
+#       production result
+#
+# Each level can be in a different state and none covers another. If
+# the instrument is not qualified, SECURITY_VERDICT is withheld as
+# WITHHELD_INSTRUMENT_NOT_QUALIFIED and the observations are published
+# but not certified. If the instrument is qualified, the verdict is
+# the production one and the observations certify.
+#
+# PERSISTED ARTIFACTS
+# ---------------------------------------------------------------------------
+#   diagnostics/uhcr_fail_closed/PRECONDITIONS.json
+#   diagnostics/uhcr_fail_closed/EVIDENCE.json
+#   diagnostics/uhcr_fail_closed/METRICS.json
+#   diagnostics/uhcr_fail_closed/VERDICT.md
+#   diagnostics/uhcr_fail_closed/current_run/     (mirror)
+#   diagnostics/uhcr_fail_closed/historical_runs/ (stale archives)
+#   diagnostics/test_evidence.json                (Omega Diary)
+#
+# ROLE IN THE SUITE
+# ---------------------------------------------------------------------------
+# The adversarial battery attacks the layered architecture of
+# proteccion.py. The credential red-teams attack credencial.py. The
+# metrological kernel audits the instruments. The integration smoke
+# test checks the honest end-to-end path. The monitor correlates
+# external and internal observation. The fail-closed auditor qualifies
+# itself against synthetic controls. The seal closure test verifies
+# that declared algebra is physically operated. The universal closure
+# verifies that what is verified equals what is loaded equals what is
+# executed. The enablement theorem verifies purity of construction.
+# The total attack campaign measures coherence and attributability of
+# the suite. The microscope calibration measures the perturbation of
+# the observation act. This file implements the complete metrological
+# doctrine in a single instrument: it audits the whole system surface,
+# qualifies itself with a synthetic trojan separate from production,
+# mutates itself to prove its own sensitivity, ablates universal
+# modules and gates to prove the auditor survives the disappearance of
+# any component, infers dependency edges by signature and experiment,
+# freezes positive witnesses, separates production evidence from
+# qualification evidence, and publishes a hierarchical record where
+# instrument, coverage and result do not cover one another.
+#
+# PRINCIPLE
+# ---------------------------------------------------------------------------
+# A single PASS cannot hide a broken instrument. A single FAIL cannot
+# hide a broken test. A qualification cannot be claimed without the
+# synthetic trojan and the mutation test. A production verdict cannot
+# be claimed without the instrument being qualified. An ablation
+# cannot be claimed without the auditor surviving and the absence
+# being detected. A dependency cannot be claimed without signature,
+# annotation, SEGURIDAD or experiment. An absence of counterexample
+# cannot be claimed without a positive control and a frozen witness.
+# Every layer is measured, every layer is published, and none of them
+# covers another.
+#
+# ===========================================================================
 
 from __future__ import annotations
 
