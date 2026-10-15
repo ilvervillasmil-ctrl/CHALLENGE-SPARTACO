@@ -1,26 +1,25 @@
 # tests/test_conformidad_independiente.py
 """
-EXPERIMENTO DE ATACANTE VIRTUAL — conformidad independiente
+VIRTUAL ATTACKER EXPERIMENT — independent conformance
 
-Principio:
-  El atacante no tiene la clave privada.
-  Parte solo de superficies observables.
-  Cada ataque avanza hasta la primera barrera real de proteccion.py.
-  Se registra la estación de detención.
-  Solo BREACH (aceptación de modificación no autorizada) es fallo de seguridad.
+Principle:
+  The attacker does not have the private key.
+  Starts only from observable surfaces.
+  Each attack advances up to the first real barrier in proteccion.py.
+  The stopping station is recorded.
+  Only BREACH (acceptance of unauthorized modification) is a security failure.
 
-Estaciones reales extraídas de proteccion.verificar() / verificar_manifiesto():
-  1. entrada_datos      — datos deben ser bytes
-  2. manifiesto_forma   — exactamente {cuerpo, firma}; tipos
-  3. firma              — Ed25519 sobre canónico del cuerpo
-  4. esquema_cuerpo     — CLAVES_CUERPO exactas + tipos/rangos
+Real stations extracted from proteccion.verificar() / verificar_manifiesto():
+  1. entrada_datos      — data must be bytes
+  2. manifiesto_forma   — exactly {cuerpo, firma}; types
+  3. firma              — Ed25519 over canonical body
+  4. esquema_cuerpo     — exact CLAVES_CUERPO + types/ranges
   5. nucleo             — SHA-256(datos) vs cuerpo["nucleo"]
   6. canales            — S/Q vs cuerpo["S"], cuerpo["Q"]
   7. n_bytes            — len(datos) vs cuerpo["n_bytes"]
 
-z e identidad_neutra son evidencia (pasos), no barreras de rechazo en fallos.
+z and identidad_neutra are evidence (steps), not rejection barriers on failures.
 """
-
 from __future__ import annotations
 
 import copy
