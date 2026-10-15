@@ -1,15 +1,115 @@
-# ===============================================================
-#  test_acceso_adversarial.py  (v1.3 — aligned with the corrected acceso.py)
-# ===============================================================
-# Adversarial test suite for modules/spartaco_seguridad/acceso.py
+# ===========================================================================
+# SPARTACO-SECURITY — tests/test_acceso_adversarial.py  (v1.3)
+# ===========================================================================
 #
-# Covers: legitimate flow (must AUTHORIZE), replay of the same nonce,
-# reuse of a valid signature for a different 'access' request, future timestamp,
-# expired TTL, missing policy, storage-layer exception
-# (fail-closed behavior), race conditions (2 and 20 threads) targeting the SAME nonce
-# (atomicity of consumption), and premature consumption (a denied policy
-# does NOT leave the nonce available for reuse).
-# ===============================================================
+# ADVERSARIAL SUITE FOR
+#     modules/spartaco_seguridad/acceso.py
+#
+# WHAT THIS FILE COVERS
+# ---------------------------------------------------------------------------
+#   Legitimate flow                must AUTHORIZE
+#   Replay of the same nonce       must BLOCK with NONCE_REUSADO
+#   Signature reuse on a different access request
+#                                  must BLOCK under INTEGRIDAD_COMPROMETIDA
+#                                  or FIRMA_INVALIDA
+#   Future timestamp               must BLOCK with SOLICITUD_FUERA_DE_RELOJ
+#   Expired TTL                    must BLOCK with SOLICITUD_EXPIRADA
+#   Expired TTL does not consume   second attempt must still be
+#                                  SOLICITUD_EXPIRADA, not NONCE_REUSADO
+#   Missing policy                 must BLOCK with POLITICA_DENEGADA
+#   Denied policy consumes nonce   second attempt with valid rules must
+#                                  return NONCE_REUSADO
+#   Storage-layer exception        must fail-closed with CODIGO_INVALIDO
+#   Missing permissions            must BLOCK with POLITICA_DENEGADA
+#   Race, 2 threads, same nonce    exactly 1 AUTORIZADO
+#   Race, 20 threads, same nonce   exactly 1 AUTORIZADO, remainder
+#                                  NONCE_REUSADO, sum = 20
+#
+# OBSERVABLE CONTRACT
+# ---------------------------------------------------------------------------
+# The module exposes two operations:
+#
+#   A.construir_solicitud(...)  -> {"ok": True, "solicitud": {...}}
+#   A.verificar_acceso(...)     -> {"estado": ..., "conceptos": [...]}
+#
+# The verification result's `estado` is one of AUTORIZADO or BLOQUEADO.
+# The `conceptos` list carries the specific rejection reason when blocked.
+# A rejection without a specific concept is not accepted as PASS; the
+# tests require the exact concept that corresponds to each failure mode.
+#
+# POLICY FIXTURE
+# ---------------------------------------------------------------------------
+# REGLA_OK declares a minimal policy:
+#   resource "servidor-pagos", operation "debitar"
+#   identity "cliente-1" with permission "debito.permitido"
+# This policy is the reference against which every test verifies.
+#
+# TIME CONTROL
+# ---------------------------------------------------------------------------
+# Tests 03, 04 and 04b monkeypatch A._ahora_iso to simulate future and
+# expired timestamps without waiting for real time. This makes the tests
+# deterministic and fast, and it isolates the time checks from the
+# clock of the host.
+#
+# ATOMICITY
+# ---------------------------------------------------------------------------
+# Tests 08 and 09 use a threading.Barrier to make N threads call
+# verificar_acceso at the same instant with the same request. The
+# contract requires exactly one AUTORIZADO. The rest must return
+# NONCE_REUSADO. The test counts both and requires the sum to equal N,
+# so a thread that returned something else would fail the test rather
+# than being silently ignored.
+#
+# CONSUMPTION SEMANTICS
+# ---------------------------------------------------------------------------
+# The suite pins two architectural decisions in executable form:
+#
+#   test_04b  A TTL-expired request does NOT consume the nonce.
+#             Consumption happens after the time checks.
+#
+#   test_05b  A policy-denied request DOES consume the nonce.
+#             Once a request reaches the verification stage, the nonce
+#             is spent regardless of whether the policy authorized it.
+#             This is the fail-closed choice: the system prefers a
+#             false negative (a denied request consumes a nonce) over
+#             a false positive (a denied request leaves the nonce
+#             available for a second attempt).
+#
+# STIMULUS SOURCE
+# ---------------------------------------------------------------------------
+# This file is the source of stimuli for other tests in the suite.
+# test_monitoreo_diario.py imports the same construction and verification
+# patterns to generate correlated telemetry. Changes to the fixtures or
+# to the request shape here propagate to that observer, so this file is
+# a maintenance reference for the rest of the suite.
+#
+# WHAT THIS FILE IS NOT
+# ---------------------------------------------------------------------------
+#   - It is not an audit of proteccion.py or credencial.py.
+#   - It does not qualify an instrument.
+#   - It does not persist evidence.
+#   - It does not run a Monte Carlo.
+#   - It does not certify the whole system: it certifies the observable
+#     contract of acceso.py under the attacks listed above.
+#
+# ROLE IN THE SUITE
+# ---------------------------------------------------------------------------
+# This is the traditional adversarial file for the access module. It is
+# shorter than the metrological auditors and does not carry doctrine
+# beyond the fail-closed denial rule. It is the first file to read when
+# learning the contract of acceso.py, and the reference for the stimuli
+# that other observers reuse.
+#
+# PRINCIPLE
+# ---------------------------------------------------------------------------
+# A rejected request must be rejected by the contract, with the specific
+# concept that corresponds to the failure mode. The nonce is consumed
+# after the time checks and after the request reaches the verification
+# stage, so fail-closed applies to the sequence, not only to the final
+# decision. Under concurrency, exactly one authorization is granted for
+# a single nonce.
+#
+# ===========================================================================
 from __future__ import annotations
 
 import sys
