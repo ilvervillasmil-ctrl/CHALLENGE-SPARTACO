@@ -1,49 +1,133 @@
-# ===============================================================
-# tests/test_proteccion_adversarial_demolicion.py
-# VPSI-TRUTH — PROTECCION — batería unificada adversarial + demolición
+# ===========================================================================
+# SPARTACO-SECURITY — tests/test_proteccion_adversarial_demolicion.py
+# VPSI-TRUTH — PROTECCION — UNIFIED ADVERSARIAL + DEMOLITION BATTERY
+# ===========================================================================
 #
-# ---------------------------------------------------------------
-# AUTORÍA
-#   Batería de pruebas: 
-#   de Ilver Villasmil, sobre el módulo
-#   modules/spartaco_seguridad/proteccion.py — cuya autoría,
-#   arquitectura y diseño son de Ilver Villasmil.
+# AUTHORSHIP
+# ---------------------------------------------------------------------------
+#   Test battery: Ilver Villasmil, over the module
+#   modules/spartaco_seguridad/proteccion.py — whose authorship,
+#   architecture and design are by Ilver Villasmil.
 #
-#   Rol de este archivo: atacar el módulo, no diseñarlo. Cada test
-#   intenta romper una propiedad que el módulo declara.
-# ---------------------------------------------------------------
+#   Role of this file: attack the module, not design it. Each test
+#   attempts to break a property the module declares.
 #
-# CADENA ATACADA
-#   MANIFIESTO → FORMA → CUERPO → CANONICALIZACIÓN → ED25519
-#   → IDENTIDAD → NUCLEO/S/Q → EVIDENCIA → VEREDICTO
+# CHAIN ATTACKED
+# ---------------------------------------------------------------------------
+#   MANIFEST -> FORM -> BODY -> CANONICALIZATION -> ED25519
+#   -> IDENTITY -> CORE/S/Q -> EVIDENCE -> VERDICT
 #
-# INVARIANTES BAJO PRUEBA
-#   1. Alteración de autoridad ⇒ rechazo.
-#   2. Referencia externa ⇒ nunca sustituye al cuerpo firmado.
-#   3. Artefacto alterado ⇒ nunca se salva con z / neutro / externos.
-#   4. Entrada hostil ⇒ rechazo controlado, NUNCA excepción libre.
-#      (una excepción no capturada es fail-open en cualquier caller
-#       con `try/except: pass`; por eso cuenta como fallo de seguridad)
-#   5. verificar() ⇒ no muta la evidencia recibida.
-#   6. Modo desconocido ⇒ cae a lo estricto, nunca a diagnóstico.
+# INVARIANTS UNDER TEST
+# ---------------------------------------------------------------------------
+#   1. Authority alteration -> rejection.
+#   2. External reference -> never replaces the signed body.
+#   3. Tampered artifact -> never saved by z / neutro / externals.
+#   4. Hostile input -> controlled rejection, NEVER a free exception.
+#      (an uncaught exception is fail-open in any caller with
+#       `try/except: pass`; therefore it counts as a security failure)
+#   5. verificar() -> does not mutate the evidence it receives.
+#   6. Unknown mode -> falls back to strict, never to diagnostic.
 #
-# ESTADO CONOCIDO AL ENTREGAR
-#   Contra proteccion.py con el esquema de `valuaciones` acotado
-#   (len ≤ 64, 0 ≤ x ≤ 256): 737 recolectados, 0 fallos, 
-#   Sin ese acotado: fallan valuaciones[-1], [10**40] y
-#   list(range(100000)) — el módulo devuelve ok=True y debe dar False.
+# KNOWN STATE AT DELIVERY
+# ---------------------------------------------------------------------------
+#   Against proteccion.py with the bounded `valuaciones` schema
+#   (len <= 64, 0 <= x <= 256): 737 collected, 0 failures.
+#   Without that bound: valuaciones[-1], [10**40] and
+#   list(range(100000)) fail — the module returns ok=True where it
+#   must return False.
 #
-# FUERA DE ALCANCE DE ESTA BATERÍA (no se prueba porque el API
-# actual no lo declara; queda como deuda de arquitectura):
-#   - artifact_id no está ligado a los bytes del artefacto
-#   - rollback: version_minima la elige el caller, sin anclaje persistente
-#   - emitido / clave_publica_id: firmados pero nunca consultados
-#     (sin ventana de validez ni revocación)
-#   - el verificador se ejecuta en el mismo proceso que lo verificado
-#   Ningún test puede cerrar estos cuatro. Se documentan aquí para
-#   que quien audite no los confunda con cobertura.
-# ===============================================================
-
+# OUT OF SCOPE OF THIS BATTERY (not tested because the current API
+# does not declare it; left as architectural debt):
+#   - artifact_id is not bound to the artifact bytes.
+#   - rollback: version_minima is chosen by the caller, no persistent
+#     anchor.
+#   - emitido / clave_publica_id: signed but never consulted (no
+#     validity window, no revocation).
+#   - the verifier runs in the same process as the verified.
+#   No test in this battery can close these four. They are documented
+#   here so that whoever audits does not mistake them for coverage.
+#
+# STRUCTURE OF THE BATTERY
+# ---------------------------------------------------------------------------
+#
+#   HELPERS
+#       blindado(fn, ...)          — hostile call: exception != rejection
+#       exige_rechazo_limpio(...)  — must reject without exception
+#       remanifestar(...)          — re-sign a mutated body (attacker
+#                                    WITH the legitimate key)
+#       DictMalo, DictMutante      — hostile mapping subclasses
+#       SiempreIgual               — __eq__ always True
+#
+#   1  Happy path / basic contract
+#   2  Fail-closed (missing/None/garbage manifest)
+#   3  Strict form: exactly {cuerpo, firma}, no extra keys
+#   4  Body mutation and deletion across all 14 declared fields
+#   5  Artifact integrity (flip, append, pop, critical positions)
+#   6  Signature malleability (Ed25519 non-canonical S, R, lengths)
+#   6b Numeric canonicalization DIAGNOSTIC (not a security test):
+#      measures whether 3 == 3.0 is normalized or distinguished
+#   7  Public key (bad lengths, attacker key, hostile types)
+#   8  Canonicalization / serialization (ordering, NFC/NFD,
+#      surrogates, deep nesting, circular refs, round-trip JSON)
+#   9  Version / schema (regressive, high, mismatched, signed but
+#      not authorized)
+#  10  n_neutro: the body commands; external arguments do not override
+#  11  z / neutro are EVIDENCE, never authority
+#  12  Diagnostic mode: relaxes manifest requirement, not validity
+#  13  Fragments: exact coverage (no byte uncovered)
+#  14  Direct crypto API (firmar_bytes / verificar_bytes)
+#  15  External references never take authority (nucleo/S/Q
+#      overrides, hostile bytes with matching externals)
+#  16  Algorithms / identity / length (mutated fields break signature)
+#  17  Adversarial types: 23 hostile values, ZERO skips; numeric
+#      equivalence is a measured branch, not a skip
+#  18  Deep mutation / aliasing: nested list mutation, verify does
+#      not mutate caller input, TOCTOU body
+#  19  TOCTOU / hostile mappings: multi-read dict, __eq__ always
+#      True against canonical signing
+#  20  Sealing / resealing: neutro mark is a build mark, not a
+#      security barrier; the signature catches the tampered artifact
+#  21  Extreme data / DoS: empty, single byte, 10 KB, all-zeros,
+#      all-0xFF, hostile types, version 10**5000, 5 MB body,
+#      2 MB artifact
+#  22  Concurrency: 8 threads x 30 verifications, 240 results, all
+#      ok=True, no shared state
+#  23  Contract invariants: never raises on arbitrary input,
+#      unknown mode never relaxes to diagnostic, fallos/conceptos
+#      always present, ok=True iff fallos empty
+#  24  Full chain: build, verify ok, tamper one byte, verify fails
+#      under "nucleo"
+#
+# POSTURE
+# ---------------------------------------------------------------------------
+# This is the densest adversarial battery in the suite for a single
+# module. It concentrates fire on proteccion.py while the credential
+# red-teams cover credencial.py and the UHCR auditor covers isolated
+# resources. The fourth invariant (hostile input -> controlled
+# rejection, never free exception) governs the entire structure:
+# crash counts as security failure, and clean rejection is the only
+# acceptable outcome for hostile input.
+#
+# ROLE IN THE SUITE
+# ---------------------------------------------------------------------------
+# The credential red-teams attack credencial.py. The metrological
+# kernel audits the instruments. The integration smoke test checks
+# the honest path. The monitor correlates external and internal
+# observation. The fail-closed auditor qualifies itself against
+# synthetic controls. This file concentrates on proteccion.py with
+# depth: signature malleability, canonicalization, TOCTOU, aliasing,
+# DoS and concurrency, all with explicit acknowledgement of the four
+# architectural debts that no test can close.
+#
+# PRINCIPLE
+# ---------------------------------------------------------------------------
+# A crash is not a rejection. An external reference is not authority.
+# A signed field is not an enforced field. An equivalence of value is
+# not an equivalence of type. The battery attacks each of these
+# assumptions until the module either rejects cleanly or admits it
+# cannot, and it documents the four debts it cannot reach.
+#
+# ===========================================================================
 from __future__ import annotations
 
 import copy
