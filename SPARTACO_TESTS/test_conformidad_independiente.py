@@ -1,25 +1,191 @@
-# tests/test_conformidad_independiente.py
-"""
-VIRTUAL ATTACKER EXPERIMENT — independent conformance
-
-Principle:
-  The attacker does not have the private key.
-  Starts only from observable surfaces.
-  Each attack advances up to the first real barrier in proteccion.py.
-  The stopping station is recorded.
-  Only BREACH (acceptance of unauthorized modification) is a security failure.
-
-Real stations extracted from proteccion.verificar() / verificar_manifiesto():
-  1. entrada_datos      — data must be bytes
-  2. manifiesto_forma   — exactly {cuerpo, firma}; types
-  3. firma              — Ed25519 over canonical body
-  4. esquema_cuerpo     — exact CLAVES_CUERPO + types/ranges
-  5. nucleo             — SHA-256(datos) vs cuerpo["nucleo"]
-  6. canales            — S/Q vs cuerpo["S"], cuerpo["Q"]
-  7. n_bytes            — len(datos) vs cuerpo["n_bytes"]
-
-z and identidad_neutra are evidence (steps), not rejection barriers on failures.
-"""
+# ===========================================================================
+# SPARTACO-SECURITY — tests/test_conformidad_independiente.py
+# VIRTUAL ATTACKER EXPERIMENT — INDEPENDENT CONFORMANCE
+# SPEC: SPARTACO-SEGURIDAD-ATAQUE-VIRTUAL-1.0
+# ===========================================================================
+#
+# PRINCIPLE
+# ---------------------------------------------------------------------------
+# The attacker does not have the private key.
+# Starts only from observable surfaces.
+# Each attack advances up to the first real barrier in proteccion.py.
+# The stopping station is recorded.
+# Only BREACH (acceptance of unauthorized modification) is a security
+# failure.
+#
+# THE SEVEN REAL STATIONS
+# ---------------------------------------------------------------------------
+# Extracted directly from proteccion.verificar() / verificar_manifiesto().
+# The file does NOT invent station names; it derives them from the real
+# fields of the result dict (fallos, conceptos, pasos, error).
+#
+#   1. entrada_datos      data must be bytes
+#   2. manifiesto_forma   exactly {cuerpo, firma}; types
+#   3. firma              Ed25519 over canonical body
+#   4. esquema_cuerpo     exact CLAVES_CUERPO + types/ranges
+#   5. nucleo             SHA-256(datos) vs cuerpo["nucleo"]
+#   6. canales            S/Q vs cuerpo["S"], cuerpo["Q"]
+#   7. n_bytes            len(datos) vs cuerpo["n_bytes"]
+#
+# z and identidad_neutra are evidence (steps), not rejection barriers
+# on failures.
+#
+# INDEPENDENT ORACLE
+# ---------------------------------------------------------------------------
+# The file reimplements the verification contract WITHOUT importing
+# anything from proteccion.py. Four functions form the external
+# specification:
+#
+#   oracle_canonical      canonical serialization written by hand with
+#                         the same options the contract declares
+#                         (sorted keys, no spaces, ASCII-escaped, no NaN)
+#   oracle_verify_sig     Ed25519 verification using the cryptography
+#                         library directly, not through proteccion.py
+#   oracle_nucleo         SHA-256 of the data
+#   oracle_canales        SHA-256 of the two halves of the data
+#
+# If the module and the oracle disagree, the disagreement is the
+# finding. This is the same doctrine of Klein's three layers that the
+# canon/man customs test applies to canonicalization: the
+# specification is written independently, and the contrast between the
+# two is what gets published.
+#
+# HONEST ATTACKER MODEL
+# ---------------------------------------------------------------------------
+# The AtacanteVirtual constructor asserts three things:
+#
+#   no attribute "private_key"
+#   no attribute "priv"
+#   no "private" in the internal dict
+#
+# And sin_clave_privada() verifies there is no private_key, priv,
+# ruta_priv or seed. A test that attacked the system WITH the private
+# key would not be simulating a real attacker; it would be simulating
+# the authority, and the conclusions would be invalid. The file ensures
+# in every execution that the attacker does not have that material.
+#
+# INTENTAR_FIRMA_FALSA — POSITIVE CONTROL INSIDE THE ATTACK
+# ---------------------------------------------------------------------------
+# The attacker builds the canonical message of the body it wants to
+# forge, generates 64 random bytes with os.urandom, and presents them
+# as a signature. Before passing the fake signature to the real system,
+# the file verifies with the independent oracle that this signature
+# does not validate against the public key. The attacker must confirm
+# with its own oracle that the signature is false, so that when the
+# system rejects it, the conclusion is "the system rejects signatures
+# forged without the private key" rather than "the signature happened
+# to be valid by chance". The file does not depend on probability; it
+# verifies the rejection before presenting the attack.
+#
+# STATION DETECTION AND CLASSIFICATION
+# ---------------------------------------------------------------------------
+# estacion_detencion(result) derives the stopping station from the real
+# contract fields only. It uses the real keys of the contract: fallos,
+# conceptos, pasos, error. If ok is True it returns NINGUNA_BREACH
+# because the attack was accepted. If fallos contains "datos" it
+# returns entrada_datos. If fallos contains "manifiesto" it
+# distinguishes between MANIFIESTO_AUSENTE, FIRMA_INVÁLIDA,
+# CÓDIGO_INVÁLIDO and VERSIÓN_REGRESIVA to identify whether the stop
+# was at the manifest shape, the signature, or the body schema. Same
+# for nucleo, canales and n_bytes. If there are failures but none
+# match a known category, it returns "otro:" + fallos[0], which is a
+# finding because it means an undeclared station appeared.
+#
+# clasificar(result, expected_rejection) returns:
+#
+#   BREACH          ok=True where a rejection was expected
+#   BLOCKED         ok=False where a rejection was expected
+#   REACHED_LATER   the attack went further than expected but was
+#                   stopped before acceptance
+#
+# The distinction between BREACH and REACHED_LATER matters: BREACH is
+# a security failure, REACHED_LATER is informational.
+#
+# THE TEN PROGRESSIVE ATTACKS
+# ---------------------------------------------------------------------------
+#   test_ataque_00_reconocimiento         public structure visible,
+#                                         no private key
+#   test_ataque_01_mutacion_artifact_id   body field mutated, no
+#                                         re-sign: stop at firma /
+#                                         esquema_cuerpo / forma
+#   test_ataque_02_mutacion_nucleo        body nucleo mutated: stop at
+#                                         firma or esquema_cuerpo
+#   test_ataque_03_mutacion_canales       body S/Q mutated: stop at
+#                                         firma or esquema_cuerpo
+#   test_ataque_04_flip_byte_artefacto    artifact flipped, manifest
+#                                         intact: stop at nucleo /
+#                                         canales / n_bytes
+#   test_ataque_05_sustitucion_A_sobre_B  manifest A on data B: stop
+#                                         at nucleo / canales / n_bytes
+#   test_ataque_06_firma_sin_clave        random signature after body
+#                                         mutation: stop at firma
+#   test_ataque_07_manifiesto_extra       extra key: stop at
+#                                         manifiesto_forma
+#   test_ataque_08_cuerpo_incompleto      missing body field: stop at
+#                                         firma / esquema_cuerpo /
+#                                         manifiesto_forma
+#   test_ataque_09_sin_manifiesto         manifiesto=None: stop at
+#                                         manifiesto_forma with
+#                                         MANIFIESTO_AUSENTE
+#
+# FINAL TABLE AND ASSERTIONS
+# ---------------------------------------------------------------------------
+# test_99_tabla_final_atacante runs seven representative attacks,
+# accumulates the results, and prints a table with three columns:
+# attack name, stopping station, classification. It then verifies four
+# assertions:
+#
+#   1. The attacker does not possess the private key.
+#   2. There was no BREACH.
+#   3. Every hostile attack ended with BLOCKED and ok=False.
+#   4. The set of stopping stations includes at least one from
+#      {firma, manifiesto_forma, esquema_cuerpo} AND at least one from
+#      {nucleo, canales, n_bytes}.
+#
+# The fourth assertion matters because it verifies the experiment
+# actually exercised both families of barriers in the pipeline. If
+# every attack had stopped at the same station, the experiment would
+# not have walked the full pipeline. The coverage requirement ensures
+# the map the file builds is real and not a simplification.
+#
+# WHAT THIS FILE IS NOT
+# ---------------------------------------------------------------------------
+#   - It does not exhaust the adversarial surface (that is the
+#     red-team's role).
+#   - It does not qualify an instrument.
+#   - It does not persist a dossier.
+#   - It does not certify the whole system: it draws a map of the
+#     verification pipeline using the virtual attacker as a probe.
+#
+# ROLE IN THE SUITE
+# ---------------------------------------------------------------------------
+# The red-teams look for failures. The metrological kernel measures
+# instruments. The isolated-resource auditors qualify a resource
+# against synthetic controls. The monitor correlates observation. The
+# universal closure verifies verified == loaded == executed. The
+# transition auditor measures state changes. The RAW causal boundary
+# auditor audits the Engine-provider boundary. The UI auditor verifies
+# the user can recover and download. The rotation suite covers the
+# full lifecycle of a link. The unified hard audit merges the five
+# fronts into a single CI entry. The DVC calibration qualifies the
+# audit motor. The canon/man customs test measures canonicalization
+# and manifest shape against an independent specification. The
+# Sentinel test audits the supervisor. This file is the experiment
+# that maps the verification pipeline, using the virtual attacker as
+# a probe and the independent oracle as a reference.
+#
+# PRINCIPLE
+# ---------------------------------------------------------------------------
+# An attacker without the private key must be stopped at a real
+# barrier of the contract. Only the acceptance of an unauthorized
+# modification is a security failure. Rejections at any station are
+# the expected behavior. The map of stopping stations is the result,
+# and it must cover both families of barriers so the experiment
+# actually walked the pipeline. The attacker model is verified to be
+# honest in every execution, and the fake signature is verified false
+# with the independent oracle before being presented to the system.
+#
+# ===========================================================================
 from __future__ import annotations
 
 import copy
