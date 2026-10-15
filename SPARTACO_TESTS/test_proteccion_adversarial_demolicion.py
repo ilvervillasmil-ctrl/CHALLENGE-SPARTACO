@@ -9,123 +9,142 @@
 #   modules/spartaco_seguridad/proteccion.py — whose authorship,
 #   architecture and design are by Ilver Villasmil.
 #
-#   Role of this file: attack the module, not design it. Each test
-#   attempts to break a property the module declares.
+#   Role of this file: attack the architecture, not redesign it. Each
+#   block attacks one architectural layer the module declares, and no
+#   layer is accepted on the reputation of another.
 #
-# CHAIN ATTACKED
+# THESIS
 # ---------------------------------------------------------------------------
-#   MANIFEST -> FORM -> BODY -> CANONICALIZATION -> ED25519
-#   -> IDENTITY -> CORE/S/Q -> EVIDENCE -> VERDICT
+# It is a mistake to read this battery as "a test of Ed25519". The
+# signature is ONE layer among several. The module is an architecture
+# of stacked guarantees, and a break in any layer breaks the module
+# even when the signature still verifies. This file attacks each layer
+# separately and refuses to let a pass in one layer cover a gap in
+# another.
 #
-# INVARIANTS UNDER TEST
+# THE ARCHITECTURE UNDER ATTACK — LAYERS
 # ---------------------------------------------------------------------------
-#   1. Authority alteration -> rejection.
-#   2. External reference -> never replaces the signed body.
-#   3. Tampered artifact -> never saved by z / neutro / externals.
-#   4. Hostile input -> controlled rejection, NEVER a free exception.
-#      (an uncaught exception is fail-open in any caller with
-#       `try/except: pass`; therefore it counts as a security failure)
-#   5. verificar() -> does not mutate the evidence it receives.
-#   6. Unknown mode -> falls back to strict, never to diagnostic.
+#
+#   L1  ENVELOPE — the container that carries {body, signature} must
+#       be exactly that and nothing more. The signature protects the
+#       body's contents, not the dictionary that wraps it. Extra keys,
+#       flat fields, capital variants, embedded nulls, __eq__ overrides
+#       are all attacks on L1.
+#
+#   L2  CANONICALIZATION — the serialization of the body before signing
+#       must be deterministic, type-strict and non-collapsing. Key
+#       ordering, NFC vs NFD, zero-width, BOM, surrogates, deep nesting,
+#       mixed int/str keys, int-vs-float equivalence: each is an attack
+#       on L2 that can silently break L8 without breaking L8's tests.
+#
+#   L3  EVIDENCE vs AUTHORITY — z, neutro, identidad_neutra, and every
+#       external reference passed by the caller are EVIDENCE. They must
+#       never substitute for the signed body. An external reference
+#       that "confirms" a tampered artifact must not authorize it. This
+#       layer is orthogonal to cryptography.
+#
+#   L4  ARTIFACT INTEGRITY — corruption of the artifact must be
+#       reported at the specific node that detects it, not at a generic
+#       "something failed". Byte flips at positions 0, middle, tail and
+#       critical positions must land under the right node.
+#
+#   L5  IMMUTABILITY and TOCTOU — verify() must not mutate the caller's
+#       manifest or data, must read each field once, and must not allow
+#       a mapping that returns different values across reads to be
+#       accepted. Aliasing, hostile mappings and __eq__ always True are
+#       attacks on L5.
+#
+#   L6  RESPONSE CONTRACT — ok=True implies empty fallos; fallos and
+#       conceptos are always present as lists; verify() never raises on
+#       arbitrary input. Every consumer downstream depends on L6.
+#
+#   L7  MODE FALLBACK — an unknown mode must fall back to STRICT, never
+#       to DIAGNOSTIC. Ten hostile mode values, including None, empty,
+#       integers, lists, dicts and booleans, are attacks on L7.
+#
+#   L8  SIGNATURE — Ed25519 non-canonical forms (S+L, S=L, S+2L, high
+#       bit, all-0xFF), non-canonical R, truncated 63-byte and extended
+#       65-byte signatures. L8 is necessary, not sufficient: L8 can
+#       pass while L1, L2, L3, L4, L5, L6 or L7 is broken.
+#
+#   L9  VERSION / SCHEMA — regressive versions, extreme-high versions,
+#       incompatible schemas, and "signed but not authorized" schemas
+#       are attacks on L9. Signing a value does not authorize it.
+#
+#   L10 DIRECT CRYPTO API — firmar_bytes / verificar_bytes exposed
+#       directly must reject hostile types, wrong messages and reused
+#       signatures. L10 is not covered by L8.
+#
+#   L11 FRAGMENT COVERAGE — the fragmenter must cover every byte,
+#       under any k, without crash. A missing byte at the tail is an
+#       undetected corruption channel.
+#
+#   L12 DOS / EXTREME INPUTS — empty, single-byte, 10 KB, all-zeros,
+#       all-0xFF, version 10**5000, 5 MB body, 2 MB artifact, circular
+#       references, deep nesting. Timeout is a failure; classified
+#       exception is a pass.
+#
+#   L13 CONCURRENCY — 8 threads x 30 verifications on the same
+#       manifest, 240 results, all ok=True. Any shared mutable state
+#       is an attack surface L13 exposes.
+#
+# INVARIANTS THAT GOVERN THE WHOLE BATTERY
+# ---------------------------------------------------------------------------
+#   * A crash is NOT a rejection. An uncaught exception is fail-open in
+#     any caller with `try/except: pass`, and therefore counts as a
+#     security failure on every layer.
+#   * An external reference is NOT authority (L3).
+#   * A signed field is NOT an enforced field (L9).
+#   * An equivalence of value is NOT an equivalence of type (L2).
+#   * A pass in one layer does NOT cover a gap in another.
 #
 # KNOWN STATE AT DELIVERY
 # ---------------------------------------------------------------------------
-#   Against proteccion.py with the bounded `valuaciones` schema
-#   (len <= 64, 0 <= x <= 256): 737 collected, 0 failures.
+#   With the bounded `valuaciones` schema (len <= 64, 0 <= x <= 256):
+#   737 collected, 0 failures.
 #   Without that bound: valuaciones[-1], [10**40] and
 #   list(range(100000)) fail — the module returns ok=True where it
-#   must return False.
+#   must return False. This is documented, not hidden.
 #
-# OUT OF SCOPE OF THIS BATTERY (not tested because the current API
-# does not declare it; left as architectural debt):
-#   - artifact_id is not bound to the artifact bytes.
-#   - rollback: version_minima is chosen by the caller, no persistent
-#     anchor.
-#   - emitido / clave_publica_id: signed but never consulted (no
-#     validity window, no revocation).
-#   - the verifier runs in the same process as the verified.
-#   No test in this battery can close these four. They are documented
-#   here so that whoever audits does not mistake them for coverage.
-#
-# STRUCTURE OF THE BATTERY
+# ARCHITECTURAL DEBT (out of scope of this battery)
 # ---------------------------------------------------------------------------
+#   No test in this file can close these four. They are listed so that
+#   whoever audits does not mistake them for coverage:
 #
-#   HELPERS
-#       blindado(fn, ...)          — hostile call: exception != rejection
-#       exige_rechazo_limpio(...)  — must reject without exception
-#       remanifestar(...)          — re-sign a mutated body (attacker
-#                                    WITH the legitimate key)
-#       DictMalo, DictMutante      — hostile mapping subclasses
-#       SiempreIgual               — __eq__ always True
+#   D1  artifact_id is not bound to the artifact bytes.
+#   D2  rollback: version_minima is chosen by the caller, no persistent
+#       anchor.
+#   D3  emitido / clave_publica_id: signed but never consulted. No
+#       validity window, no revocation.
+#   D4  the verifier runs in the same process as the verified.
 #
-#   1  Happy path / basic contract
-#   2  Fail-closed (missing/None/garbage manifest)
-#   3  Strict form: exactly {cuerpo, firma}, no extra keys
-#   4  Body mutation and deletion across all 14 declared fields
-#   5  Artifact integrity (flip, append, pop, critical positions)
-#   6  Signature malleability (Ed25519 non-canonical S, R, lengths)
-#   6b Numeric canonicalization DIAGNOSTIC (not a security test):
-#      measures whether 3 == 3.0 is normalized or distinguished
-#   7  Public key (bad lengths, attacker key, hostile types)
-#   8  Canonicalization / serialization (ordering, NFC/NFD,
-#      surrogates, deep nesting, circular refs, round-trip JSON)
-#   9  Version / schema (regressive, high, mismatched, signed but
-#      not authorized)
-#  10  n_neutro: the body commands; external arguments do not override
-#  11  z / neutro are EVIDENCE, never authority
-#  12  Diagnostic mode: relaxes manifest requirement, not validity
-#  13  Fragments: exact coverage (no byte uncovered)
-#  14  Direct crypto API (firmar_bytes / verificar_bytes)
-#  15  External references never take authority (nucleo/S/Q
-#      overrides, hostile bytes with matching externals)
-#  16  Algorithms / identity / length (mutated fields break signature)
-#  17  Adversarial types: 23 hostile values, ZERO skips; numeric
-#      equivalence is a measured branch, not a skip
-#  18  Deep mutation / aliasing: nested list mutation, verify does
-#      not mutate caller input, TOCTOU body
-#  19  TOCTOU / hostile mappings: multi-read dict, __eq__ always
-#      True against canonical signing
-#  20  Sealing / resealing: neutro mark is a build mark, not a
-#      security barrier; the signature catches the tampered artifact
-#  21  Extreme data / DoS: empty, single byte, 10 KB, all-zeros,
-#      all-0xFF, hostile types, version 10**5000, 5 MB body,
-#      2 MB artifact
-#  22  Concurrency: 8 threads x 30 verifications, 240 results, all
-#      ok=True, no shared state
-#  23  Contract invariants: never raises on arbitrary input,
-#      unknown mode never relaxes to diagnostic, fallos/conceptos
-#      always present, ok=True iff fallos empty
-#  24  Full chain: build, verify ok, tamper one byte, verify fails
-#      under "nucleo"
-#
-# POSTURE
+# WHAT THIS FILE IS NOT
 # ---------------------------------------------------------------------------
-# This is the densest adversarial battery in the suite for a single
-# module. It concentrates fire on proteccion.py while the credential
-# red-teams cover credencial.py and the UHCR auditor covers isolated
-# resources. The fourth invariant (hostile input -> controlled
-# rejection, never free exception) governs the entire structure:
-# crash counts as security failure, and clean rejection is the only
-# acceptable outcome for hostile input.
+#   - It is not a signature test with architectural decoration. The
+#     signature is L8; the architecture is L1..L13.
+#   - It is not a red-team of credencial.py (that is a different file).
+#   - It is not an isolated-resource audit with synthetic calibration
+#     (that is the UHCR auditor).
+#   - It is not a metrological kernel that qualifies its own instrument.
+#   - It does not certify the whole system: it certifies the layered
+#     guarantees of one module under adversarial pressure.
 #
 # ROLE IN THE SUITE
 # ---------------------------------------------------------------------------
 # The credential red-teams attack credencial.py. The metrological
-# kernel audits the instruments. The integration smoke test checks
-# the honest path. The monitor correlates external and internal
+# kernel audits the instruments. The integration smoke test checks the
+# honest end-to-end path. The monitor correlates external and internal
 # observation. The fail-closed auditor qualifies itself against
-# synthetic controls. This file concentrates on proteccion.py with
-# depth: signature malleability, canonicalization, TOCTOU, aliasing,
-# DoS and concurrency, all with explicit acknowledgement of the four
-# architectural debts that no test can close.
+# synthetic controls before auditing a resource. This file concentrates
+# on proteccion.py with depth across thirteen architectural layers,
+# and it documents the four debts no test can reach.
 #
 # PRINCIPLE
 # ---------------------------------------------------------------------------
-# A crash is not a rejection. An external reference is not authority.
-# A signed field is not an enforced field. An equivalence of value is
-# not an equivalence of type. The battery attacks each of these
-# assumptions until the module either rejects cleanly or admits it
-# cannot, and it documents the four debts it cannot reach.
+# A module is an architecture, not a cryptographic primitive. The
+# signature is one layer among thirteen. The battery attacks each
+# layer separately, refuses to let one cover another, counts a crash
+# as a security failure, and names the four debts it cannot close.
 #
 # ===========================================================================
 from __future__ import annotations
