@@ -1,35 +1,77 @@
-# ==============================================================
+# ===========================================================================
 # SPARTACO-SECURITY — tests/test_killdog.py
-# ==============================================================
+# ===========================================================================
 #
-# Batería funcional de Killdog.
+# FUNCTIONAL BATTERY FOR KILLDOG
+# ---------------------------------------------------------------------------
 #
-# Comprueba:
+# Killdog is the autonomous enforcement component of SPARTACO. Its role is
+# to decide PERMIT or ELIMINATE based on the vector Phi computed against a
+# declared anchor. It does not consult Engine or Centinela: its decision is
+# mechanical, deterministic, and self-contained.
 #
-#   1. Artefacto coherente        -> PERMITIR
-#   2. Identidad incorrecta       -> ELIMINAR
-#   3. Contrato incorrecto        -> ELIMINAR
-#   4. Pertenencia incorrecta     -> ELIMINAR
-#   5. Coherencia incorrecta      -> ELIMINAR
-#   6. Autoautorización           -> ELIMINAR
-#   7. Ausencia de evidencia      -> ELIMINAR
-#   8. Discriminación SELF/NONSELF
-#   9. Vector Φ
-#  10. Clonación
-#  11. Misma capacidad
-#  12. Cuerpos diferentes
-#  13. Misma A_K
-#  14. Ubicaciones diferentes
-#  15. Un cuerpo no modifica la capacidad
-#  16. No consulta Engine
-#  17. No consulta Centinela
+# WHAT THIS FILE CHECKS
+# ---------------------------------------------------------------------------
 #
-# IMPORTANTE:
+#    1. Coherent artifact          -> PERMIT
+#    2. Wrong identity             -> ELIMINATE
+#    3. Wrong contract             -> ELIMINATE
+#    4. Wrong signature            -> ELIMINATE
+#    5. Wrong membership           -> ELIMINATE
+#    6. Violated coherence         -> ELIMINATE
+#    7. Unauthorized capability    -> ELIMINATE
+#    8. Self-authorization         -> ELIMINATE
+#    9. Absence of evidence        -> ELIMINATE
+#   10. SELF / NONSELF discrimination
+#   11. Vector Phi
+#   12. Cloning: same capacity, different body
+#   13. Many bodies / one capability / one anchor
+#   14. All bodies apply the same logic
+#   15. A body may move, the law does not change
+#   16. Not governable from outside
+#   17. Does not consult Engine or Centinela
 #
-# Este test comprueba la DECISIÓN de enforcement.
-# No elimina procesos ni archivos reales.
+# IMPORTANT
+# ---------------------------------------------------------------------------
 #
-# ==============================================================
+# This test checks the ENFORCEMENT DECISION only.
+# It does NOT kill real processes or delete real files.
+#
+# WHAT THIS FILE DOES NOT DO
+# ---------------------------------------------------------------------------
+#
+#   - It does not attack credencial.py, perimeter.py or the launcher.
+#   - It does not measure resistance against hostile cryptographic input.
+#   - It does not run a Monte Carlo.
+#   - It does not qualify its own instrument.
+#
+# WHAT THIS FILE DOES
+# ---------------------------------------------------------------------------
+#
+#   - It exercises the decision surface of Killdog against its declared
+#     anchor across seventeen coherent and incoherent scenarios.
+#   - It verifies the binary decision (ACCEPTED / REJECTED) and the
+#     enforcement reaction (PERMIT / ELIMINATE).
+#   - It verifies that cloning preserves capability and anchor while
+#     changing body and location.
+#   - It verifies the doctrine of autonomy: no consultation of Engine or
+#     Centinela, no discretionary decision.
+#   - It verifies non-governability: Killdog cannot be deactivated from
+#     outside.
+#
+# ROLE IN THE SUITE
+# ---------------------------------------------------------------------------
+#
+# The adversarial files test whether the system resists hostile input. The
+# metrological kernel tests whether the instruments that measure that
+# resistance are themselves trustworthy. The integration smoke test checks
+# that the honest end-to-end path works. This file closes the loop at the
+# decision layer: it verifies that the component which ultimately says
+# PERMIT or ELIMINATE does so coherently, deterministically, autonomously,
+# cloneably without loss of law, and without any back door for external
+# deactivation.
+#
+# ===========================================================================
 
 from __future__ import annotations
 
