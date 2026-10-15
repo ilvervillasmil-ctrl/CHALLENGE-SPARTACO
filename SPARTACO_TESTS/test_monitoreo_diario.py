@@ -1,41 +1,140 @@
-# ===============================================================
-# tests/test_monitoreo_diario.py - LA SALA COMO AUDITOR INTERNO
-# ===============================================================
+# ===========================================================================
+# SPARTACO-SECURITY — tests/test_monitoreo_diario.py
+# THE ROOM AS AN INTERNAL AUDITOR
+# ===========================================================================
 #
-# UN archivo. Dos auditores, tres verificaciones:
+# TWO AUDITORS, THREE VERIFICATIONS
+# ---------------------------------------------------------------------------
 #
-#   PYTEST (auditor externo)    ejecuta experimentos reales y dicta PASS/FAIL
-#   MONITOREO (auditor interno) observa las capacidades declaradas por su
-#                               propio contrato (SEGURIDAD => observable),
-#                               sin leer assertions y sin catalogos
-#   DIARIO                      este archivo escribe la evidencia correlacionada
-#                               en diagnostics/test_evidence.json (esquema 1.0,
-#                               campo events por caso) y diagnostics/
-#                               omega_diary_publisher.py la publica SOLO en
-#                               OMEGA_DIARY.md. SPARTACO la lee automatico.
+# PYTEST (external auditor)
+#     Runs real experiments and dictates PASS / FAIL.
 #
-# Los estimulos son los PATRONES de la suite (construir/verificar de
-# test_acceso_adversarial): nada de ataques artificiales ni matrices
-# manuales. Test nuevo => ejecucion nueva => telemetria nueva.
+# MONITOREO (internal auditor)
+#     Observes the capabilities declared by each resource's own contract
+#     (SEGURIDAD => observable). It does not read assertions and does not
+#     consult catalogs.
 #
-# Familias que el expediente distingue:
-#   SEGURIDAD    dictamenes (ALLOW/DENY/alertas)
-#   OPERACION    excepciones y ejecuciones incompletas
-#   ARQUITECTURA recursos declarados que el monitor no vio (sordos)
+# DIARIO (this file)
+#     Writes the correlated evidence into diagnostics/test_evidence.json
+#     (schema 1.0, "events" field per case). diagnostics/
+#     omega_diary_publisher.py publishes it ONLY into OMEGA_DIARY.md.
+#     SPARTACO reads it automatically.
 #
-# Lecturas de la matriz (derivadas de DATOS, nunca del nombre):
-#   NORMAL | OBSERVADO | ALERTA | ERROR | VIOLACION | +MONITORING_GAP
+# STIMULI
+# ---------------------------------------------------------------------------
 #
-# Confianza del diagnostico:
-#   CAUSA_REPORTADA   el recurso devolvio el motivo
-#   CAUSA_DESCONOCIDA solo sabemos donde termino la evidencia
+# Stimuli are the PATTERNS of the suite (build / verify from
+# test_acceso_adversarial). No artificial attacks, no manual matrices.
+# New test => new execution => new telemetry, automatically.
 #
-# Falsificacion nivel 3 (prueba no circular): el experimento ciego
-# mutila una fuente y el detector debe notar la ceguera.
+# FAMILIES THE DOSSIER DISTINGUISHES
+# ---------------------------------------------------------------------------
 #
-# Solo lectura: nunca altera una decision; un fallo del instrumento
-# no tumba un test. Apagable con SPARTACO_INSTRUMENTO=0.
-# ===============================================================
+# SEGURIDAD      verdicts (ALLOW / DENY / alerts)
+# OPERACION      exceptions and incomplete executions
+# ARQUITECTURA   declared resources the monitor never saw (deaf)
+#
+# MATRIX READINGS (DERIVED FROM DATA, NEVER FROM THE TEST NAME)
+# ---------------------------------------------------------------------------
+#
+# NORMAL | OBSERVED | ALERT | ERROR | VIOLATION | +MONITORING_GAP
+#
+#   PASS/SKIP + 0 events            -> NORMAL
+#   PASS + alerts/denials           -> ALERT
+#   PASS + operation errors         -> ERROR
+#   PASS + events without defense   -> OBSERVED
+#   FAIL + 0 events                 -> NORMAL
+#   FAIL + alerts                   -> ALERT
+#   FAIL + operation errors         -> ERROR
+#   FAIL + events without defense   -> VIOLATION (candidate; verify
+#                                     against contract before asserting)
+#   gap > 0                         -> suffix +MONITORING_GAP
+#
+# DIAGNOSTIC CONFIDENCE
+# ---------------------------------------------------------------------------
+#
+# CAUSA_REPORTADA    the resource returned the reason
+# CAUSA_DESCONOCIDA  we only know where the evidence ended
+#
+# LEVEL 3 FALSIFICATION (NON-CIRCULAR TEST)
+# ---------------------------------------------------------------------------
+#
+# The blind experiment mutilates a wrapped source and the detector must
+# notice the blindness. Without this, a claim of "100% coverage" would be
+# trivial: an auditor that cannot detect its own blind spot proves nothing.
+#
+# READ-ONLY GUARANTEE
+# ---------------------------------------------------------------------------
+#
+# The instrument never alters a decision. A failure of the instrument
+# never brings down a test. It can be turned off with
+# SPARTACO_INSTRUMENTO=0.
+#
+# INSTRUMENTATION MODEL
+# ---------------------------------------------------------------------------
+#
+# Auto-discovery at session start: _instrumentar_todo walks
+# modules/spartaco_seguridad/*.py, imports each module, reads its
+# SEGURIDAD dict, extracts id and capacidades_recurso, and wraps every
+# callable capability with a function that registers the result to the
+# monitor before returning it to the caller.
+#
+# - A ContextVar (_EN) prevents recursive wrapping.
+# - An exception in a wrapped capability is logged as family OPERACION
+#   and re-raised; it is never silenced or converted.
+# - Wrapping failures accumulate in fallos_wrap and are detected by the
+#   final test.
+# - Teardown restores the originals: the instrument leaves no trace.
+#
+# EXPERIMENTS
+# ---------------------------------------------------------------------------
+#
+#   test_00  legitimate flow          PASS + events, no denial -> OBSERVED
+#   test_01  nonce replay             PASS + defense rejects  -> ALERT
+#   test_02  integrity compromised    signature reused on another access
+#   test_03  nonce race               20 threads, exactly one authorized;
+#                                     monitor must see >= 10 DENY in ring
+#   test_04  operation exception      family OPERACION logs, no invented
+#                                     cause
+#   test_05  heartbeat and matrix     PYTEST x MONITOR table printed
+#                                     for the diary
+#   test_06  level 3 falsification    the auditor must detect its own
+#                                     forced blindness
+#   test_07  verdict of the room      hard correlation properties in a
+#                                     single verdict
+#
+# HARD PROPERTIES ENFORCED BY test_07
+# ---------------------------------------------------------------------------
+#
+#   - Every dossier has a reading, or the result is EJECUTADO.
+#   - Every dossier has gap == 0 (no MONITORING_GAP).
+#   - No dossier has reading VIOLATION.
+#   - Any FAILED pytest case must have at least one signal from the
+#     monitor (alert, denial, or operation error). Otherwise, P-M is
+#     violated: pytest failed and the monitor saw nothing.
+#
+# PERSISTENCE
+# ---------------------------------------------------------------------------
+#
+#   - diagnostics/test_evidence.json   schema 1.0, merged by nodeid with
+#                                      previous cases; nothing destroyed.
+#   - diagnostics/omega_diary_publisher.py  publishes to OMEGA_DIARY.md.
+#   - SPARTACO reads the diary automatically.
+#
+# ROLE IN THE SUITE
+# ---------------------------------------------------------------------------
+#
+# The adversarial harness measures how many mutations are blocked. The
+# metrological kernel measures whether the instrument that counts the
+# mutations is itself trustworthy. The integration smoke test checks that
+# the honest path works. This file measures something distinct: whether
+# the system has internal visibility of its own executions, whether that
+# visibility is correlated with what pytest sees from outside, and
+# whether that correlation is falsifiable. Without this layer, a system
+# could pass every test without anyone knowing whether its defenses were
+# triggered or merely never provoked.
+#
+# ===========================================================================
 
 from __future__ import annotations
 
