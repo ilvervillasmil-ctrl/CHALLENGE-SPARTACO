@@ -2,17 +2,130 @@
 # VPSI-TRUTH — test_credencial_redteam.py
 # ===============================================================
 #
-# Red-team adversarial de modules/spartaco_seguridad/credencial.py
-# "EL MONTECARLO SE HIZO DE 10 MILLONES PERO POR PRACTICIDAD Y TIEMPO SE MANTIENE 
-# EN 100 ATAQUES y 10 DOC 
-# NO modifica credencial.py ni proteccion.py.
-# NO convierte un fixture roto en ACCESS_DENIED.
-# NO usa la función bajo prueba como oráculo de sí misma
-#     (salvo tests marcados [INTERNAL/UNIT]).
+# Adversarial red-team for modules/spartaco_seguridad/credencial.py
 #
-# Semilla reproducible: sha256(canal || i.to_bytes(8, "big"))
+# NOTE ON SCALE
+# -------------
+# "The Monte Carlo was built for 10 million iterations, but for
+#  practicality and time it is kept at 100 attacks and 10 documents."
+# The sample is evidence of stability, NOT a mathematical proof.
+#
+# OBJECTIVE
+# ---------
+# Exercise the public API of credencial.py with adversarial inputs
+# derived only from observable surfaces and deterministic material,
+# verifying that:
+#
+#   1. Rejection always happens through the contract (ACCESS_DENIED),
+#      never through an exception, a corrupt dict, or a silent None.
+#   2. Any rejection leaves the ZSQ tree unchanged.
+#   3. No domain secret can authorize another domain.
+#   4. No replay of usage_id is possible, even under concurrency.
+#   5. Foreign manifests, foreign blobs, or foreign public keys
+#      cannot cross-authorize.
+#   6. Export/import never leaks secrets or genealogy, and never
+#      overwrites live state with a stale snapshot.
+#
+# CONSTRAINTS / GUARANTEES
+# ------------------------
+# - Does NOT modify credencial.py or proteccion.py.
+# - Does NOT turn a broken fixture into ACCESS_DENIED. If C.proteger()
+#   does not build a valid document, FixtureError is raised and the
+#   attack is reported as NOT EXECUTED, never as PASS.
+# - Does NOT use the function under test as its own oracle, except in
+#   tests explicitly marked [INTERNAL/UNIT].
+# - Reproducible seed: sha256(channel || i.to_bytes(8, "big")).
+#
+# TEST TAXONOMY
+# -------------
+#   [API/ADVERSARIAL]  — attacks on the public surface.
+#   [INTERNAL/UNIT]    — functional properties of internal derivations
+#                        (KDF labels, nonce determinism). Not external
+#                        attacks.
+#
+# SECTIONS
+# --------
+# A. Fixtures and deterministic generation
+#    - All inputs come from h(channel, i). Nothing here asserts a
+#      security property. Failure to build a fixture aborts the test.
+#
+# B. Ciphertext integrity               [API/ADVERSARIAL]
+#    - Single-bit flip on any position of the ciphertext must deny.
+#    - Every byte of the ciphertext, flipped, must deny.
+#    - State must not mutate after a rejection.
+#
+# C. Header and envelope integrity      [API/ADVERSARIAL]
+#    - Every live header field mutated → deny, state unchanged.
+#    - Recovery wrap mutated (nonce, ct) → deny.
+#
+# D. Secret / domain separation         [API/ADVERSARIAL]
+#    - K_auth ≠ K_def ≠ K_doc ≠ K_rec: no cross-authorization.
+#    - Same IKM under different labels yields different keys.
+#    - Changing the context changes all four derived domains.
+#
+# E. Document / context / manifest binding  [API/ADVERSARIAL]
+#    - Credentials of doc i cannot open doc j.
+#    - K_rec of j cannot recover doc i.
+#    - Manifest of j cannot authorize blob of i.
+#    - Mutating manifest fields (artifact_id) → deny.
+#
+# F. Anti-replay and single-use           [API/ADVERSARIAL]
+#    - Same uso_id presented twice → second denied.
+#    - Equivalent encoding (hex vs b64 of the secret) cannot replay.
+#
+# G. Concurrency and atomicity            [API/ADVERSARIAL]
+#    - 2 threads, same uso_id → exactly 1 ok, 1 denied.
+#    - 32 threads, same uso_id → exactly 1 ok, 31 denied.
+#    - 20 concurrent defense expansions → counter=20, level=20.
+#
+# H. Defense and state mutation           [API/ADVERSARIAL]
+#    - Valid K_def expands the tree (counter++, branch fixed).
+#    - Wrong K_def denies and leaves state identical.
+#    - Valid reset → counter=0, branch=ROOT.
+#    - Foreign reset → deny, no mutation.
+#
+# I. Export / import and isolation         [API/ADVERSARIAL]
+#    - Exported JSON contains no hex or b64 of the four secrets.
+#    - Exported JSON contains no "nodos", "hijos", "compromiso",
+#      "parent_id".
+#    - Importing a package with embedded genealogy is denied.
+#    - Malformed import types are denied.
+#    - Importing a mutated snapshot cannot overwrite live state.
+#
+# J. Nonces and derivation                [INTERNAL/UNIT]
+#    - Same (k_doc, salt, nucleo, emission) → same 12-byte nonce.
+#    - Changing only emission → different nonce.
+#
+# K. Monte Carlo KDF                      [INTERNAL/UNIT]
+#    - Sample of MONTECARLO_KDF derivations: no observed domain,
+#      sample, or nonce collisions. Reports observation, not proof.
+#
+# L. Monte Carlo documents                [API/ADVERSARIAL]
+#    - MONTECARLO_DOCUMENTOS independent documents: protect → open
+#      → recover cycle stable. Reports observed blob collisions,
+#      not mathematical absence.
+#
+# Optional recovery                       [API/ADVERSARIAL]
+#    - Without declared recovery secret there is no wrap, recover
+#      denies, and the root does not invent K_rec.
+#    - The honest cycle (protect → open → recover) works. If this
+#      fails it is a fixture or API regression, not an attack.
+#
+# OBSERVATION MODEL
+# -----------------
+#   PASS       — the attack hit the contract and the property held.
+#   FAIL       — the attack was accepted or the contract was broken.
+#   FIXTURE    — the attack was NOT executed (fixture could not be
+#                built). Never counted as PASS.
+#   EXCEPTION  — the API raised where it should have denied.
+#
+# RUNNER
+# ------
+# - Discovers all test_* functions, expects TESTS_ESPERADOS.
+# - Prints PASS / FAIL / FIXTURE / EXCEPCION per test.
+# - Exits 0 only if there are zero failures.
+# - FIXTURE failures explicitly report "the attack was NOT executed".
 # ===============================================================
-
 from __future__ import annotations
 
 import base64
