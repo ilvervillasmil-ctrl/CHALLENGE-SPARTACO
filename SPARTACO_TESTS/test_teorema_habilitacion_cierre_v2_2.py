@@ -1,8 +1,158 @@
-# ===============================================================
-# TEOREMA DE HABILITACIÓN Y CIERRE v2.2
+# ===========================================================================
+# ENABLEMENT AND CLOSURE THEOREM v2.2
 # tests/test_teorema_habilitacion_cierre_v2_2.py
-# Norma: TEOREMA_HABILITACION_CIERRE_v2.2.md
-# ===============================================================
+# Norm: TEOREMA_HABILITACION_CIERRE_v2.2.md
+# ===========================================================================
+#
+# OBJECT OF THE THEOREM
+# ---------------------------------------------------------------------------
+# This file is an executable theorem. It is not an adversarial battery, a
+# metrological kernel, a monitor, a resource auditor, or a closure test.
+# What it measures is the interaction between the system and the instrument
+# that observes it, specifically whether the engine constructs its own
+# registry WITHOUT executing the code of the capabilities it registers.
+#
+# The theorem is a statement about PURITY OF CONSTRUCTION, not about the
+# system's behavior under attack.
+#
+# THESIS
+# ---------------------------------------------------------------------------
+# The engine's bootstrap must not exercise any of the capabilities it
+# declares as registered. If it did, the registry would be contaminated
+# by its own construction and the measurement would be circular. The
+# theorem verifies this by installing an external profiler before
+# instantiating the engine and computing the intersection between the
+# calls observed during bootstrap and the capabilities registered
+# afterwards.
+#
+# THREE OUTCOMES, MUTUALLY EXCLUSIVE
+# ---------------------------------------------------------------------------
+#   INTEGRITY (integridad):
+#     LIMPIA         bootstrap intersected no registered capability
+#     CONTAMINADA    bootstrap intersected at least one registered capability
+#     INVALIDA       engine did not construct or did not reach operative state
+#
+#   CLOSURE (cierre):
+#     VACIO                       no capability enabled from H_0
+#     OBSERVABLE                  fixed point reached (no capability produced delta)
+#     NO_DETERMINADO              some capability was neither stable nor
+#                                 producing delta (exception, non-dict output)
+#     NO_CERRADO_EN_PRESUPUESTO   budget P_max exhausted before fixed point
+#     NO_EJERCIDO                 exercise not permitted (no args allowed and
+#                                 H_0 empty) or integrity invalid
+#
+# FASE I — CONTAMINATION
+# ---------------------------------------------------------------------------
+# A ProfilerBootstrap hooks sys.setprofile before constructing Engine.
+# For every call observed, it records name, qualname, file and line.
+# For every registered capability, the file computes an identity key
+# (absolute path, first line number, qualname) and two aliases (the
+# function name and the capability name). The intersection between the
+# two sets is the contamination set.
+#
+# FASE II — PRECONDITIONS AND ENABLEMENT
+# ---------------------------------------------------------------------------
+# R_pre is computed from the signature of each capability via
+# inspect.signature. A capability satisfies R_pre(H) iff every required
+# parameter is present in H. H_0 is empty by declaration and R_BIND is
+# false by declaration, so capabilities cannot bind their own arguments.
+# E(H_0) is the set of capabilities with no required parameters.
+# E_ctrl(H_0) is the subset of E(H_0) whose names are in CONTROL_NAMES
+# (evaluar_universal, ejecutar_total).
+#
+# FASE III — ENABLEMENT LOOP
+# ---------------------------------------------------------------------------
+# The theorem defines a budget P_max = 8 steps. In each step, the file
+# recomputes the enabled set with the current hypothesis, invokes each
+# capability according to its signature, absorbs new or changed keys
+# into H, and checks whether any delta occurred. If a delta occurred,
+# it increments the step counter and repeats. If a full step produces
+# no delta, the closure is OBSERVABLE. If the budget is exhausted, the
+# closure is NO_CERRADO_EN_PRESUPUESTO. If the enabled set becomes
+# empty first, the closure is VACIO. If a capability raises, the step
+# is marked RAISE and H is not modified. If a capability returns a
+# non-dict, the step is marked SALIDA_NO_DICT and H is not modified.
+#
+# THE INVARIANT
+# ---------------------------------------------------------------------------
+# The control capabilities (evaluar_universal, ejecutar_total) are never
+# exercised during the test. This is verified by checking that no step
+# in the enablement loop ends with an identifier ending in either of
+# those two names. If they were exercised, the measurement would be
+# contaminated by the controls themselves. The controls are observers,
+# not participants.
+#
+# PERSISTED ARTIFACTS
+# ---------------------------------------------------------------------------
+# All artifacts live in diagnostics/habilitacion_cierre_v2_2/ and are
+# written in a strict order before any assertion executes:
+#
+#   PRECONDITIONS.json   R_BIND=False, PERMITE_EJERCICIO_SIN_ARGS_EN_H0=False,
+#                        P_max=8, H_0=[]
+#   DISCOVERY.json       bootstrap calls, contamination count, contaminantes,
+#                        full capability list with class, signature, file, line
+#   ENABLEMENT.json      H_0, R_BIND, E_H0, E_ctrl_H0
+#   EVIDENCE.json        integridad, cierre, observations, logic, pasos,
+#                        H_final
+#   VERDICT.md           human-readable narrative of the whole theorem
+#
+# ORDER OF WRITING
+# ---------------------------------------------------------------------------
+# preconditions -> discovery -> enablement -> evidence -> verdict.
+# Each file depends on the previous one. All are on disk before the
+# three assertions run.
+#
+# THREE ASSERTIONS
+# ---------------------------------------------------------------------------
+#   test_fase_i_intersecta_c_real
+#     bootstrap was captured; contamination count matches between
+#     DISCOVERY and EVIDENCE; integrity is one of the three valid values.
+#
+#   test_fase_ii_r_pre
+#     ENABLEMENT exists; R_BIND is false; every identifier in e_ctrl_h0
+#     ends with evaluar_universal or ejecutar_total.
+#
+#   test_resultado_par
+#     integrity and closure are within their vocabularies; integrity is
+#     not INVALIDA; the controls were not exercised. The failure message
+#     for INVALIDA includes the full VERDICT.md content, so a broken
+#     engine surfaces the narrative on failure.
+#
+# WHAT THIS FILE IS NOT
+# ---------------------------------------------------------------------------
+#   - It is not adversarial: it does not try to break the engine.
+#   - It is not metrological: it does not qualify its own instrument.
+#   - It is not an audit of an isolated resource.
+#   - It does not certify the whole system: it certifies that the
+#     engine constructs its registry without executing the code it
+#     registers.
+#   - It is not a red-team, a monitor, or a closure test of declared
+#     algebra.
+#
+# ROLE IN THE SUITE
+# ---------------------------------------------------------------------------
+# The adversarial battery attacks the layered architecture of
+# proteccion.py. The credential red-teams attack credencial.py. The
+# metrological kernel audits the instruments. The integration smoke
+# test checks the honest end-to-end path. The monitor correlates
+# external and internal observation. The fail-closed auditor qualifies
+# itself against synthetic controls. The seal closure test verifies
+# that declared algebra is physically operated. The universal closure
+# verifies that what is verified equals what is loaded equals what is
+# executed. This file closes a different loop: it verifies that the
+# registry of the engine is built WITHOUT executing the code it
+# registers. It is a theorem of purity of construction, not of
+# behavior under stress.
+#
+# PRINCIPLE
+# ---------------------------------------------------------------------------
+# A system that executes the code it registers during its own bootstrap
+# is measuring itself. A system that registers without executing is
+# measuring the world. The theorem captures this distinction as a
+# computable property, verifies it externally with a profiler, and
+# persists the evidence before asserting the three conclusions.
+#
+# ============================================================================
 
 from __future__ import annotations
 
