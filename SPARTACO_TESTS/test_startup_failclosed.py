@@ -1,52 +1,162 @@
-# =============================================================================
+# ===========================================================================
 #  UHCR — FAIL-CLOSED AUDIT OF AN ISOLATED RESOURCE (SINGLE FILE)
-# =============================================================================
+#  TARGET: modules/spartaco_seguridad/arranque.py
+#  SPEC: UHCR-RESOURCE-1.4
+# ===========================================================================
 #
-#  USAGE
-#  -----
-#  This file is all-in-one: engine + tests. It has no dependencies on other .py files.
-#  To audit a different resource:
-#     1. Copy this file as   tests/test_<resource>_failclosed.py
-#     2. Change ONLY the TARGET line (section 1, immediately below).
-#  Nothing else is modified. The identity of each copy is defined by three hashes:
+# USAGE
+# ---------------------------------------------------------------------------
+# This file is all-in-one: engine + tests. It has no dependencies on other
+# .py files. To audit a different resource:
+#    1. Copy this file as   tests/test_<resource>_failclosed.py
+#    2. Change ONLY the TARGET line (section 1, immediately below).
+# Nothing else is modified. The identity of each copy is defined by three
+# hashes:
 #   * AUDITOR_SHA256          = H(exact file executed, including TARGET)
-#   * AUDITOR_TEMPLATE_SHA256 = H(complete file − TARGET line)
-#       → identical across all copies ⇔ copies are byte-for-byte identical
-#         except for TARGET (no adjustments made after inspecting the resource).
+#   * AUDITOR_TEMPLATE_SHA256 = H(complete file minus the TARGET line)
+#       -> identical across all copies iff copies are byte-for-byte
+#          identical except for TARGET (no adjustments made after
+#          inspecting the resource).
 #   * AUDITOR_ENGINE_SHA256   = H(section M exclusively: the engine)
-#       → identical across all copies ⇔ same engine.
-#  If the TARGET line is not unique or the section M markers are missing,
-#  the corresponding hash is None and the auditor is deemed UNQUALIFIED.
+#       -> identical across all copies iff the engine is the same.
+# If the TARGET line is not unique or the section-M markers are missing,
+# the corresponding hash is None and the auditor is UNQUALIFIED.
 #
-#  RULES
-#  -----
-#   * REPORT = f(EVIDENCE): everything derives from the record of this run.
+# RULES
+# ---------------------------------------------------------------------------
+#   * REPORT = f(EVIDENCE): everything derives from this run's record.
 #   * No production names, magic numbers, or hard-coded expected roles:
 #     items to be compared are discovered from the TARGET itself.
-#   * AUDIT_SCOPE=ISOLATED_RESOURCE and SYSTEM_WIDE_CLAIM=NO: the component
-#     is measured in isolation; this is not a claim about the entire system.
+#   * AUDIT_SCOPE=ISOLATED_RESOURCE and SYSTEM_WIDE_CLAIM=NO: the
+#     component is measured in isolation; this is not a claim about the
+#     entire system.
 #   * Verdict by property (families discovered by the engine); never a
-#     single, aggregated PASS. No PASS without a falsification attempt. #   * Evidence is PERSISTED before any assertion
-#     (JSON + index.jsonl in diagnostics/uhcr_resources/<resource>/).
-#   * INSTRUMENT (AUDITOR_QUALIFICATION) separated from RESOURCE
-#     (TARGET_SECURITY_RESULT): a counterexample regarding the resource does not
-#     disqualify the auditor.
+#     single, aggregated PASS. No PASS without a falsification attempt.
+#   * Evidence is PERSISTED before any assertion (JSON + index.jsonl in
+#     diagnostics/uhcr_resources/<resource>/).
+#   * INSTRUMENT (AUDITOR_QUALIFICATION) is separated from RESOURCE
+#     (TARGET_SECURITY_RESULT): a resource counterexample does not
+#     disqualify the auditor, and a non-qualified auditor withholds the
+#     verdict instead of guessing.
 #
-#  FILE STRUCTURE
-#  --------------
-#   1. Resource to be audited (TARGET)             ← only line that changes
-#   M. ENGINE (AST discovery, roles, spoofing, accounting,
-#      persistent logging, reporting, engine self-tests)
+# WHAT CHANGES WHEN TARGET = arranque.py
+# ---------------------------------------------------------------------------
+# The engine does not change. The tests do not change. Only the resource
+# under measurement changes, and with it the expected shape of the result.
+#
+#   * perimeter.py is a defensive resource: it exposes gates,
+#     verdicts and protected decisions. The engine can run FAIL_CLOSED
+#     campaigns with positive witnesses and concrete mutations.
+#
+#   * arranque.py is a packaging and integration resource: its
+#     capabilities (construir_integrado, sellar_integrado,
+#     verificar_integrado, extraer_kernel, custodia,
+#     inventariar_perimetro, _empaquetar) are not authorization gates in
+#     the classical sense. None returns a carrier with a `decision` field
+#     typed as an ALLOW/DENY enum. None has COMPOSITE_CHECKS or
+#     POSTCONDITION signature shape.
+#
+# The consequence is measured, not assumed:
+#
+#   - _probe_composite will not find a checks type in the module.
+#   - _probe_postcondition will not find a runtime decision enum.
+#   - _probe_decision_generic will search for a positive witness and
+#     will most likely not find a protected effect.
+#   - _probe_verifier will look for functions returning an `ok`-carrier
+#     and will conclude NOT_A_DEFENSE -> OUT_OF_SCOPE for dict-returning
+#     functions.
+#
+# Therefore the expected result is NOT_APPLICABLE for the properties
+# that require a protected decision, with basis
+# NO_PROTECTED_DECISION_IN_TARGET and capabilities_out_of_scope > 0.
+# The engine reports this honestly. It does not force a PASS or a FAIL
+# on a resource that has no defensible surface, and it does not treat
+# the absence of defenses as a failure of the resource or the
+# instrument. A PASS without executed falsification is impossible by
+# construction (see test_motor_zero_falsification_property_never_pass).
+#
+# SYMMETRIC CALIBRATION
+# ---------------------------------------------------------------------------
+# Regardless of the TARGET, the engine always builds two synthetic
+# controls before emitting any verdict:
+#   - a fail-open gate that MUST be diagnosed FAIL;
+#   - a fail-closed gate that MUST be diagnosed PASS.
+# If either control fails, AUDITOR_QUALIFICATION=FAIL and the verdict on
+# the resource is WITHHELD_INSTRUMENT_NOT_QUALIFIED. This is why the
+# auditor is qualified over arranque.py only after proving itself over
+# the synthetic controls, not by trusting its own output.
+#
+# ZERO-LOSS ACCOUNTING
+# ---------------------------------------------------------------------------
+# Every declared capability is placed in exactly one of four states
+# (classified, unresolved, not applicable, out of scope). Every planned
+# case is placed in exactly one of three states (executed, not executed
+# with reason, unaccounted). Every property is placed in exactly one of
+# three states (applicable and qualified, applicable and not qualified,
+# not applicable). Any unaccounted item disqualifies the auditor. This
+# is what prevents a cosmetic NOT_APPLICABLE from hiding a gap.
+#
+# IDENTITY BY THREE HASHES
+# ---------------------------------------------------------------------------
+# AUDITOR_SHA256 differs between the copy pointing at perimeter.py and
+# the copy pointing at arranque.py because the TARGET line differs.
+# AUDITOR_TEMPLATE_SHA256 is identical iff only the TARGET line changed.
+# AUDITOR_ENGINE_SHA256 is identical iff section M is byte-for-byte the
+# same. A test in section 9 recalculates both hashes independently from
+# the motor helpers and compares them against the persisted record and
+# index, so the identity claim is measured, not declared.
+#
+# NON-DESTRUCTIVE PERSISTENCE
+# ---------------------------------------------------------------------------
+# The record is written to diagnostics/uhcr_resources/<resource>/ with a
+# filename derived from UTC timestamp and RUN_ID. persist_record never
+# overwrites: it uses exclusive creation and raises FileExistsError if
+# the target path already exists. Each run appends one line to
+# index.jsonl. Two runs over the same TARGET leave two full expedientes
+# with distinct RUN_ID and RUN_IDENTITY, but identical
+# AUDITOR_ENGINE_SHA256, proving the engine did not change between runs.
+#
+# FILE STRUCTURE
+# ---------------------------------------------------------------------------
+#   1. Resource to be audited (TARGET)          <- only line that changes
+#   M. ENGINE (AST discovery, roles, spoofing, accounting, persistent
+#      logging, reporting, engine self-tests)
 #   2. Engine call (single audit + persisted log)
 #   3. Resource resolution
 #   4. Report and dossier structure
 #   5. Verdict by property (auditor vs. resource)
-#   6. Description ≠ applicability ≠ measurement ≠ verdict
-#   7. Wrapper ↔ engine equivalence
+#   6. Description != applicability != measurement != verdict
+#   7. Wrapper <-> engine equivalence
 #   8. Anti-hardcoding for the engine
-#   9. Audit log, run identity, template/engine identity, and accounting
+#   9. Audit log, run identity, template/engine identity, accounting
 #   E. Direct execution (python3 this_file.py [path/target.py])
-# =============================================================================
+#
+# ROLE IN THE SUITE
+# ---------------------------------------------------------------------------
+# The adversarial battery attacks the layered architecture of
+# proteccion.py. The credential red-teams attack credencial.py. The
+# metrological kernel audits the instruments. The integration smoke
+# test checks the honest end-to-end path. The monitor correlates
+# external and internal observation. The seal closure test verifies
+# that declared algebra is physically operated. The universal closure
+# verifies that what is verified equals what is loaded equals what is
+# executed. This file is the same UHCR auditor already applied to
+# perimeter.py, now pointed at arranque.py, to demonstrate that the
+# instrument is not coupled to the shape of any particular resource:
+# it adapts to the resource and reports what it finds, not what it
+# expected to find.
+#
+# PRINCIPLE
+# ---------------------------------------------------------------------------
+# An auditor that forces a verdict on a resource that has no defensible
+# surface is lying by excess. An auditor that hides a NOT_APPLICABLE
+# behind a cosmetic PASS is lying by omission. This file measures what
+# the resource actually exposes, qualifies itself against synthetic
+# controls before emitting any verdict, accounts for every capability,
+# case and property without loss, and persists evidence before any
+# assertion.
+#
+# ===========================================================================
 """
 UHCR — ISOLATED RESOURCE FAIL-CLOSED AUDITOR (STATIC + selective dynamic)
 ==========================================================================
