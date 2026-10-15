@@ -1,42 +1,178 @@
 """
-UHCR — NÚCLEO METROLÓGICO DE INVARIANTES SPARTACO
-SPEC: UHCR-INV-KERNEL-1.3
-
-Objetivo metrológico
---------------------
-Este archivo no certifica seguridad universal.
-
-Cadena:
-    EXTRACT (por capacidad, sin defaults inventados)
-      -> HASH
-      -> ORACLE_A/B
-      -> KNOWNGOOD independiente
-      -> MUTATION MATRIX
-      -> QUALIFY
-      -> PRODUCTION
-      -> DOSSIER
-
-Qualified(T,I) iff
-    T(KnownGood_I)=PASS
-    and MutationScore(I)=1
-
-PROPERTY_HOLDS_FOR_TESTED_DOMAIN sólo se emite para una campaña cuyo
-instrumento esté cualificado y cuyo dominio declarado haya sido ejecutado
-sin errores de medición ni contraejemplos.
-
-ORACLE_INDEPENDENCE=ALGORITHMIC_ONLY
-CONTRACT_SOURCE_INDEPENDENCE=FALSE
-FORMALLY_PROVED=FALSE
-
-Separación explícita:
-  I_GATE_CHECKS
-  I_OMEGA_GATE
-  I_DOM
-  I_POST
-  I_LIFE
-  I7_VALUE_EQUIVALENCE
-  I7_IMPLEMENTATION_PATH_INDEPENDENCE = INSTRUMENT_NOT_QUALIFIED
-  I_DISC = INSTRUMENT_NOT_QUALIFIED
+# ===========================================================================
+# UHCR — METROLOGICAL KERNEL OF SPARTACO INVARIANTS
+# SPEC: UHCR-INV-KERNEL-1.3
+# ===========================================================================
+#
+# METROLOGICAL OBJECTIVE
+# ---------------------------------------------------------------------------
+# This file does not certify universal security. It builds, qualifies, and
+# then uses measurement instruments. The chain it produces is auditable at
+# every step:
+#
+#     EXTRACT (per capability, no invented defaults)
+#       -> HASH
+#       -> ORACLE_A/B
+#       -> independent KNOWNGOOD
+#       -> MUTATION MATRIX
+#       -> QUALIFY
+#       -> PRODUCTION
+#       -> DOSSIER
+#
+# Qualified(T, I) iff
+#     T(KnownGood_I) = PASS
+#     and MutationScore(I) = 1
+#
+# PROPERTY_HOLDS_FOR_TESTED_DOMAIN is only emitted for a campaign whose
+# instrument is qualified and whose declared domain has been executed
+# without measurement errors or counterexamples.
+#
+# ---------------------------------------------------------------------------
+# EXPLICIT DECLARATIONS OF LIMIT
+# ---------------------------------------------------------------------------
+#
+#     ORACLE_INDEPENDENCE=ALGORITHMIC_ONLY
+#     CONTRACT_SOURCE_INDEPENDENCE=FALSE
+#     FORMALLY_PROVED=FALSE
+#
+# Explicit separation of gates, preserved from the dossier's own doctrine:
+#
+#     I_GATE_CHECKS
+#     I_OMEGA_GATE
+#     I_DOM
+#     I_POST
+#     I_LIFE
+#     I7_VALUE_EQUIVALENCE
+#     I7_IMPLEMENTATION_PATH_INDEPENDENCE = MEASURED (not declared)
+#     I_DISC                              = MEASURED (not declared)
+#
+# ---------------------------------------------------------------------------
+# DOCTRINE
+# ---------------------------------------------------------------------------
+#
+# Two invariants (I7_PATH, I_DISC) used to be written as literals
+# (INSTRUMENT_NOT_QUALIFIED). This version removes those literals and
+# measures them instead. If the measurement does not sustain the
+# declaration, the declaration changes by itself. The instrument cannot
+# lie about its own precision.
+#
+# ---------------------------------------------------------------------------
+# MEASURED INDEPENDENCE
+# ---------------------------------------------------------------------------
+#
+# - Oracle independence: derived from whether the path family agrees on the
+#   declared domain and whether mutation qualification passes on at least
+#   six routes. Only then is the label promoted from ALGORITHMIC_ONLY to
+#   MULTI_PATH_ALGEBRAIC_CROSSCHECK.
+# - Contract source independence: derived from whether an injected defect
+#   in the production contract is detected by the independent route family.
+# - Both facts are computed and published in every dossier. Neither is
+#   written by hand.
+#
+# ---------------------------------------------------------------------------
+# I7_PATH QUALIFICATION
+# ---------------------------------------------------------------------------
+#
+# - Six routes computing Q: three via production APIs, three via
+#   algebraically equivalent independent reimplementations.
+# - Two hundred+ domain pairs. Any divergence disqualifies.
+# - Five path mutants (always_negative, wrong_sign_AB, missing_cross_term,
+#   float_collapse, bool_collapse) must all be detected.
+# - An injected defect in eisenstein_norm must be detected by the
+#   independent family.
+# - Falsifiability test: patching one route to diverge must flip the
+#   qualification to False with reason
+#   RUTAS_EQUIVALENTES_DISCREPAN_EN_EL_DOMINIO.
+#
+# ---------------------------------------------------------------------------
+# I_DISC QUALIFICATION
+# ---------------------------------------------------------------------------
+#
+# - AST inventory of SEGURIDAD declarations across a real tree.
+# - Five truth-known fixtures (control, double collision, empty id,
+#   non-string id, triple collision).
+# - Three detector mutants (blind, always_collide, ignores_invalid) must
+#   all be detected.
+# - Injected synthetic collision tree must be detected.
+# - Engine registry witness: registering two containers with the same id
+#   must be rejected.
+# - Falsifiability test: patching the injected tree to be empty must flip
+#   the qualification to False with reason COLISION_INYECTADA_NO_DETECTADA.
+#
+# ---------------------------------------------------------------------------
+# EXTRACTION DISCIPLINE
+# ---------------------------------------------------------------------------
+#
+# - extract_contract never invents semantic defaults.
+# - A missing POLICIES, MAX_INTEGER_BITS or _ALLOWED_TRANSITIONS marks the
+#   corresponding capability as False and continues.
+# - Capabilities are independent: one failure does not invalidate the
+#   others.
+# - A meta-test reads the extractor source and asserts it contains no
+#   hardcoded 4096 and that it uses hasattr/getattr with None defaults
+#   instead of assuming presence.
+#
+# ---------------------------------------------------------------------------
+# CAMPAIGNS
+# ---------------------------------------------------------------------------
+#
+# Each production campaign has an explicitly declared domain and persists a
+# dossier with: contract hash, cases declared, cases executed, measurement
+# errors, counterexamples, result, and FORMALLY_PROVED=False.
+#
+#     I_GATE_CHECKS         DENY by policy/checks before omega only.
+#     I_OMEGA_GATE          ALLOW via checks but DENY via omega.
+#     I_DOM                 bool/float rejected at the type gate;
+#                           valid int not rejected by domain.
+#     I_POST                post-condition fails on operation, resource,
+#                           context swap, or post_ok=False; also when the
+#                           precondition was DENY.
+#     I_LIFE                forbidden state transition is rejected with
+#                           StateTransitionRejected.
+#     I7_VALUE_EQUIVALENCE  eisenstein_norm matches the reference
+#                           polynomial on five pairs.
+#     I7_PATH               cubic_channels(A, B).Q matches the independent
+#                           reference across the domain.
+#     I_DISC                collision detected on injected tree; no
+#                           collision on the real tree.
+#
+# ---------------------------------------------------------------------------
+# HONESTY RULES
+# ---------------------------------------------------------------------------
+#
+# - A declared case that was not executed yields INCONCLUSIVE, not
+#   PROPERTY_HOLDS_FOR_TESTED_DOMAIN.
+# - PROPERTY_HOLDS_FOR_TESTED_DOMAIN describes the declared domain only,
+#   never the system in general.
+# - FORMALLY_PROVED is never emitted by this pytest campaign.
+# - Campaign verdict is one of ACOTADO, ROTO, INCONCLUSO — measured, not
+#   asserted.
+#
+# ---------------------------------------------------------------------------
+# PERSISTENCE
+# ---------------------------------------------------------------------------
+#
+# - dossiers/*.json        per-invariant qualification and production.
+# - CONTRACT_SNAPSHOT.json contract extracted, hashed, capabilities.
+# - REPORT.txt             two metrological tables plus counterexamples.
+# - INDEX.json             consolidated index with provenance.
+# - ../test_evidence.json  nodeid, stdout, provenance (GitHub SHA, run id,
+#                          run number, contract hash).
+#
+# ---------------------------------------------------------------------------
+# ROLE IN THE SUITE
+# ---------------------------------------------------------------------------
+#
+# The previous files attack credencial.py, perimeter.py and the package
+# surface directly. This file is the metrological layer: it builds the
+# instruments, qualifies them against known mutations, and only then
+# measures production. While the adversarial harness asks whether the
+# system resists attacks, this kernel asks whether the tools we use to
+# measure that resistance are themselves trustworthy. The answer is
+# measured, not declared. If the measurement does not sustain the
+# declaration, the declaration falls.
+#
+# ===========================================================================
 """
 
 from __future__ import annotations
