@@ -1,12 +1,143 @@
 # ===============================================================
-# TEST ESPARTACO — HARNESS ADVERSARIAL MEDIBLE
+# TEST ESPARTACO — MEASURABLE ADVERSARIAL HARNESS
 # tests/test_espartaco_multi_atacante_montecarlo.py
 # ===============================================================
-# Una autoridad. Atacantes sin privada. RNG 100% determinista.
-# NO_OP != BLOCKED. Sin break ante BREACH. Detector por claves.
-# proteccion.py intacto.
+# One authority. Attackers without private key. RNG 100% deterministic.
+# NO_OP != BLOCKED. No break on BREACH. Key-based detector.
+# proteccion.py untouched.
+#
+# THESIS
+# ------
+# Harden and generalize the chain/graph harness into a forensic
+# Monte Carlo. Instead of only mapping WHERE the attacker gets
+# stopped, this file quantifies HOW OFTEN, WITH WHAT COVERAGE, and
+# AT WHAT DEPTH the SUT resists hostile mutations. It does not stop
+# at the first failure: it accumulates every BREACH, EXCEPTION and
+# INDETERMINATE case with reproducible identifiers.
+#
+# ORACLE SEPARATION
+# -----------------
+# The detector uses only the SUT's contract keys (fallos, conceptos,
+# pasos.ok) — no text heuristics. In addition, an independent oracle
+# (oracle_canonical, oracle_verify_sig, oracle_nucleo) allows
+# cryptographic re-verification of signatures, hashes and
+# canonicalization without trusting the SUT to grade itself.
+#
+# ATTACKER MODEL
+# --------------
+# AtacanteMonteCarlo uses __slots__ to prevent smuggling attributes.
+# It explicitly does NOT hold any private material. no_tiene_clave_privada()
+# enforces a hardcoded blacklist:
+#     private_key, priv, ruta_priv, seed_crypto, Ed25519PrivateKey
+# Each attacker is deterministic:
+#     seed = sha256(master_seed|attacker_id|frente)[:8]
+#     scenario_id = sha256(seed|attacker_id|frente|ops)[:24]
+# so any BREACH can be replayed exactly.
+#
+# STATIONS (real SUT barriers, ordered by depth)
+# ----------------------------------------------
+#   1 entrada_datos     bytes required
+#   2 manifiesto_forma  exactly {cuerpo, firma}; types
+#   3 firma             Ed25519 over canonical body
+#   4 esquema_cuerpo    exact keys + types/ranges
+#   5 nucleo            SHA-256(datos) vs body["nucleo"]
+#   6 canales           S/Q vs body["S"], body["Q"]
+#   7 n_bytes           len(datos) vs body["n_bytes"]
+#   NINGUNA_BREACH      depth 8 (all stations passed)
+#   INDETERMINATE       depth 0
+#
+# ATTACK FRONTS (weighted)
+# ------------------------
+#   entrada         5   non-bytes input types
+#   forma          10   malformed manifest (None, list, str, {})
+#   firma          10   random/truncated/extended/non-hex/zeroed sig
+#   esquema         8   missing/extra/wrong-typed body fields
+#   cuerpo         10   mutate one body field (14 candidates)
+#   datos          14   byte/bit/region/length of data
+#   nucleo_campo    6   force core in body
+#   canales_campo   6   force S and/or Q
+#   longitud        6   append/truncate bytes
+#   recomposicion   8   cross-document A<->B (body of one, sig of other)
+#   forja_cero      8   forge manifest from scratch
+#   compuesto       9   chain 2–5 mutators
+#
+# recomposicion prevents document-mixing attacks (type confusion
+# between two legitimate artifacts). forja_cero simulates a
+# from-scratch forgery. compuesto nests mutators as an adaptive
+# attacker would.
+#
+# CALIBRATION
+# -----------
+# test_00  provenance (SPEC_ID, SPEC_HASH, MASTER_SEED).
+# test_01  fixes the semantics of the detector against 8 known
+#          SUT cases before running 100,000 attacks. Without this
+#          calibration, the Monte Carlo could not interpret the SUT.
+#
+# MONTE CARLO (test_99)
+# ---------------------
+# For each of N_ATACANTES:
+#   - pick a front by weight.
+#   - build a deterministic attacker.
+#   - enforce no_tiene_clave_privada().
+#   - apply the mutator.
+#   - if the mutation is a no-op, count NO_OP and skip.
+#   - run P.verificar.
+#   - capture exceptions with traceback (never abort).
+#   - classify: BREACH / BLOCKED / INDETERMINATE.
+#   - if BREACH: accumulate case, DO NOT break.
+#   - if BLOCKED: update per-station, per-front, per-depth metrics.
+#
+# Reported artifacts:
+#   - attackers generated, no-op, executed.
+#   - blocked, breach, exception, indeterminate.
+#   - depth reached per station.
+#   - attack surface coverage per front (OK / LOW vs MIN_POR_FRENTE).
+#   - matrix front × station (the causal map at scale).
+#   - PROFUNDIDAD_MAX, ESTACION_MAX, PROFUNDIDAD_MEDIA.
+#   - UPPER 95% BOUND ≈ 3 / n_executed (rule of three).
+#   - top 10 BREACH cases with scenario_id for exact replay.
+#   - cryptographic outcome block (unauthorized acceptance,
+#     breach, private-key exposure, exceptions, indeterminate).
+#
+# FINAL HARD ASSERTS
+# ------------------
+#   - exceptions == 0
+#   - indeterminate == 0
+#   - breaches == 0                                    <-- invariant
+#   - coverage_ok: every front generated >= MIN_POR_FRENTE attacks
+#   - n_executed > 0
+#   - profundidad_max >= 2                             <-- not a
+#       degenerate SUT that blocks everything at entry
+#   - legitimate document still opens after the full run.
+#
+# STATUS
+# ------
+#   CRITICAL FAILURE  if breaches > 0
+#   FAIL              if exceptions, indeterminate, or coverage low
+#   PASS              otherwise
+#
+# RELATION TO THE REST OF THE SUITE
+# ---------------------------------
+#   test_credencial_aniquilador.py ........... monolithic attack
+#   test_credencial_redteam.py ................ 35 attacks
+#   test_credencial_redteam_continuacion.py ... 14 attacks
+#   test_D1_D7_... ............................ package-as-declaration
+#   test_d6_lector_calibracion.py ............. D6 reader calibration
+#   test_espartaco_cadena_grafo.py ............ topological map
+#   test_espartaco_multi_atacante_montecarlo.py  forensic Monte Carlo
+#                                                at scale, with
+#                                                independent oracle,
+#                                                minimum coverage and
+#                                                no abort-on-breach.
+#
+# PRINCIPLE
+# ---------
+#   With public key only, the attacker can mutate, verify and
+#   recombine — but cannot forge. The harness measures resistance
+#   with an independent oracle, enforces coverage per front,
+#   tolerates its own findings without aborting, and proves the
+#   system survives its own adversarial audit.
 # ===============================================================
-
 from __future__ import annotations
 
 import copy
