@@ -1,38 +1,162 @@
-# -*- coding: utf-8 -*-
-"""
-VPSI-TRUTH
-tests/test_vinculacion_rotativa.py
-
-Suite adversarial e integral para:
-
-    modules.spartaco_seguridad.vinculacion
-
-Principio arquitectónico:
-
-    GENERAR
-        ↓
-    REGISTRAR
-        ↓
-    CONSTRUIR
-        ↓
-    VERIFICAR
-        ↓
-    ASERTAR
-
-Reglas:
-
-1. Las entidades legítimas son deterministas.
-2. El módulo bajo prueba no genera entropía.
-3. Los ataques pueden ser estocásticos.
-4. Un ataque parte de una entidad/contexto existente.
-5. Nunca se inventa un ID para verificarlo contra un estado inexistente.
-6. El helper verificar() es pasante.
-7. No se muta el contexto base.
-8. No se inspeccionan detalles internos del módulo para decidir
-   qué debería devolver.
-9. Se verifica el contrato observable.
-10. La suite debe detectar falsos positivos.
-"""
+# ===========================================================================
+# VPSI-TRUTH — tests/test_vinculacion_rotativa.py
+# ===========================================================================
+#
+# ADVERSARIAL AND INTEGRAL SUITE FOR
+#     modules.spartaco_seguridad.vinculacion
+#
+# ARCHITECTURAL PRINCIPLE
+# ---------------------------------------------------------------------------
+#     GENERATE
+#         -> REGISTER
+#         -> BUILD
+#         -> VERIFY
+#         -> ASSERT
+#
+# The chain imposes an order. Nothing is verified before it is built.
+# Nothing is built before it is registered when verification is against
+# a store. Nothing is asserted that has not passed through the four
+# previous stages. This discipline avoids the classic failure mode of
+# security tests: verifying an invented ID against a state that never
+# existed.
+#
+# DOCTRINE (TEN RULES)
+# ---------------------------------------------------------------------------
+#   1. Legitimate entities are deterministic. No secrets, no uuid, no
+#      os.urandom, no random in the generation of identities, devices,
+#      credentials, materials or authorities.
+#   2. The module under test does not generate entropy. If the auditor
+#      sees entropy, it must come from the attack, not the system.
+#   3. Attacks may be stochastic. A dedicated RNG with fixed seed
+#      produces values that look random but are reproducible byte by
+#      byte on every run.
+#   4. An attack starts from an existing entity or context. Never
+#      invent an ID to verify against a nonexistent state.
+#   5. The verificar() helper is passthrough: it consumes exclusively
+#      the tuple that exists in the context, generates nothing, and
+#      does not mutate the context.
+#   6. The base context is never mutated.
+#   7. No internal detail of the module is inspected to decide what it
+#      should return. The observable contract is verified, not the
+#      implementation.
+#   8. The suite must detect false positives. A test that passes by
+#      accident or by lax checking must be made visible.
+#   9. Deterministic time: a fixed epoch constant feeds every test so
+#      expiration, future timestamps and clock tolerance are precise
+#      and reproducible.
+#  10. Separation between deterministic legitimate generation and
+#      stochastic adversarial pressure is explicit and preserved.
+#
+# GENERATION MODEL
+# ---------------------------------------------------------------------------
+#   _determinista(prefix, index) builds a byte material from
+#   f"VPSI-TRUTH:{prefix}:{index}", computes SHA-256, and returns
+#   f"{prefix}_{digest}". Every legitimate entity is built by this
+#   function. Two calls with the same index produce the same entity.
+#   This is what allows the suite to prove that legitimate generation
+#   is reproducible.
+#
+#   AHORA_BASE = 1800000000.0 and timestamp_iso(epoch) produce
+#   reproducible ISO timestamps compatible with the module's parser.
+#   A test that depended on time.time() would not be reproducible.
+#
+# ATTACK MODEL
+# ---------------------------------------------------------------------------
+#   ataque_estocastico(rng, prefix) produces a 256-bit value with
+#   rng.getrandbits(256) formatted as f"{prefix}_{value:064x}". It is
+#   unpredictable without the seed but reproducible with it. Every
+#   attack test uses the same dedicated RNG with seed 0x56505349,
+#   fixed at the fixture level. The stochastic character of the attack
+#   is explicitly separated from the determinism of the legitimate
+#   entity.
+#
+# FIFTY-FIVE DISTINCT SCENARIOS
+# ---------------------------------------------------------------------------
+#   LEGITIMATE FLOW AND ITS DERIVATIVES
+#       correct credential links; duplicate registration rejects;
+#       absent state rejects; missing fields reject; wrong material,
+#       device, or credential rejects.
+#
+#   INPUT VALIDATION
+#       false unlock; wrong-typed unlock; invalid timestamp; boolean
+#       timestamp; future timestamp; timestamp before issuance;
+#       manipulated digest; malformed digest; extra key; missing key;
+#       non-dict proof.
+#
+#   LIFECYCLE
+#       rotation increments generation by exactly one; old credential
+#       rejected after rotation; new credential links after rotation;
+#       revocation rejects subsequent linkage; revocation preserves
+#       evidence; rotation preserves authority, device and identity;
+#       second rotation increments again; rotation without state
+#       rejects; revocation without state rejects; repeated revocation
+#       does not create new state; a single linkage is current per
+#       identity.
+#
+#   STATE INTEGRITY AND NON-LEAK
+#       estado_de does not expose material; proof does not expose
+#       material; attacker material is not persisted; material does
+#       not appear in the store; construction does not mutate the
+#       context; verification does not mutate the context;
+#       construction does not declare linked; linked is not
+#       authorized.
+#
+#   STOCHASTIC ATTACK AND REPRODUCIBILITY
+#       sixteen consecutive stochastic attacks link none; legitimate
+#       material is reproducible; legitimate identifiers are
+#       reproducible; thirty-two attacks leave the state identical;
+#       attacker material is not persisted.
+#
+#   OBSERVABLE CONTRACT (DOCTRINAL)
+#       test_053  construction is independent of the state
+#       test_054  construction does not declare linkage
+#       test_055  LINKED does not mean AUTHORIZED
+#
+# WHAT THIS SUITE IS NOT
+# ---------------------------------------------------------------------------
+#   - It is not an audit of credencial.py, proteccion.py, perimeter.py
+#     or the launcher.
+#   - It does not qualify any instrument.
+#   - It does not run a Monte Carlo.
+#   - It does not measure coverage or performance.
+#   - It does not certify the whole system: it certifies the
+#     observable contract of vinculacion's lifecycle under
+#     deterministic legitimate flow and stochastic adversarial
+#     pressure.
+#
+# ROLE IN THE SUITE
+# ---------------------------------------------------------------------------
+# The adversarial battery attacks the layered architecture of
+# proteccion.py. The credential red-teams attack credencial.py. The
+# metrological kernel audits instruments. The integration smoke test
+# checks the honest path. The monitor correlates external and internal
+# observation. The fail-closed auditor qualifies itself against
+# synthetic controls. The seal closure test verifies declared algebra
+# is physically operated. The universal closure verifies verified ==
+# loaded == executed. The enablement theorem verifies purity of
+# construction. The total attack campaign measures coherence of the
+# suite. The microscope calibration measures the perturbation of the
+# observation act. The dynamic fail-closed surface auditor implements
+# the complete metrological doctrine over the system surface. The
+# transition auditor asks what observable state changes between
+# transitions. The RAW causal boundary auditor audits the boundary
+# between Engine and provider. The UI auditor verifies the USER can
+# recover and download the content. This file audits the full
+# lifecycle of a rotating link: register, build proof, verify, rotate,
+# revoke, under deterministic legitimate flow and stochastic
+# adversarial pressure.
+#
+# PRINCIPLE
+# ---------------------------------------------------------------------------
+# Determinism belongs to the legitimate path. Stochasticity belongs to
+# the attacker. The passthrough helper verifies what exists, not what
+# the auditor wishes existed. The chain GENERATE, REGISTER, BUILD,
+# VERIFY, ASSERT orders the operations and prevents verifying the
+# nothing. The material never appears in the state. The link is not
+# the authorization. Every property has its own test, and every test
+# is reproducible byte by byte.
+#
+# ===========================================================================
 
 from __future__ import annotations
 
