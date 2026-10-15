@@ -163,7 +163,7 @@ def verificar(solicitud: dict, pub: bytes, **kw) -> dict:
     return A.verificar_acceso(solicitud, pub_bytes=pub, reglas=REGLA_OK, **kw)
 
 
-# ---------------------------------------------------------------- 00 flujo legÃ­timo
+# ---------------------------------------------------------------- 00 flujo legitimo
 def test_00_flujo_legitimo_autoriza(claves):
     priv, pub = claves
     s = construir(priv)
@@ -184,13 +184,13 @@ def test_01_replay_nonce_reusado(claves):
     assert v2["estado"] == A.BLOQUEADO and "NONCE_REUSADO" in v2["conceptos"], v2
 
 
-# ---------------------------------------------------------------- 02 firma vÃ¡lida reusada en OTRO acceso
+# ---------------------------------------------------------------- 02 firma valida reusada en OTRO acceso
 def test_02_firma_reusada_en_otro_acceso(claves):
     priv, pub = claves
     s = construir(priv)
     assert s.get("ok"), s
     sol = s["solicitud"]
-    # el atacante tiene un manifiesto VÃLIDO pero altera el dict 'acceso'
+    # el atacante tiene un manifiesto VALIDO pero altera el dict 'acceso'
     # (mismo recurso/operacion, nonce distinto): el verificador debe bloquear
     # contrato v1.2: la solicitud transporta datos_firmados (bytes sellados)
     sol2 = {
@@ -200,8 +200,8 @@ def test_02_firma_reusada_en_otro_acceso(claves):
     }
     v = verificar(sol2, pub)
     assert v["estado"] == A.BLOQUEADO, v
-    # el nÃºcleo del canÃ³nico del acceso alterado ya no cuadra con el cuerpo
-    # firmado â†’ detenciÃ³n criptogrÃ¡fica (nucleo), no por forma
+    # el NUCLEO del CANONICO del acceso alterado ya no cuadra con el cuerpo
+    # firmado DE detention criptografica (nucleo), no por forma
     assert "INTEGRIDAD_COMPROMETIDA" in v["conceptos"] or "FIRMA_INVALIDA" in v["conceptos"], v
 
 
@@ -236,12 +236,12 @@ def test_04b_ttl_expirado_no_consume(claves, monkeypatch):
     assert s.get("ok"), s
     v1 = verificar(s["solicitud"], pub)
     assert v1["estado"] == A.BLOQUEADO and "SOLICITUD_EXPIRADA" in v1["conceptos"], v1
-    # se reenvÃ­a: sigue dando EXPIRADA (el consumo ocurre despuÃ©s del TTL)
+    # se reenvi­a: sigue dando EXPIRADA (el consumo ocurre despues del TTL)
     v2 = verificar(s["solicitud"], pub)
     assert v2["estado"] == A.BLOQUEADO and "SOLICITUD_EXPIRADA" in v2["conceptos"], v2
 
 
-# ---------------------------------------------------------------- 05 polÃ­tica ausente
+# ---------------------------------------------------------------- 05 politica ­ ausente
 def test_05_politica_ausente_deniega(claves):
     priv, pub = claves
     s = construir(priv)
@@ -250,7 +250,7 @@ def test_05_politica_ausente_deniega(claves):
     assert v["estado"] == A.BLOQUEADO and "POLITICA_DENEGADA" in v["conceptos"], v
 
 
-# ---------------------------------------------------------------- 05b polÃ­tica denegada CONSUME el nonce (C2)
+# ---------------------------------------------------------------- 05b politica denegada CONSUME el nonce (C2)
 def test_05b_politica_denegada_consume_nonce(claves):
     priv, pub = claves
     s = construir(priv)
@@ -258,7 +258,7 @@ def test_05b_politica_denegada_consume_nonce(claves):
     sol = s["solicitud"]
     v1 = A.verificar_acceso(sol, pub_bytes=pub, reglas={})
     assert v1["estado"] == A.BLOQUEADO and "POLITICA_DENEGADA" in v1["conceptos"], v1
-    # el reenvÃ­o NO debe dar otra vez polÃ­tica: el nonce ya se consumiÃ³ (C2)
+    # el reenvio NO debe dar otra vez politica: el nonce ya se consumida (C2)
     v2 = A.verificar_acceso(sol, pub_bytes=pub, reglas=REGLA_OK)
     assert v2["estado"] == A.BLOQUEADO and "NONCE_REUSADO" in v2["conceptos"], v2
 
