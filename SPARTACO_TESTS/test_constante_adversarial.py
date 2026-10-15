@@ -1,28 +1,28 @@
 # ===============================================================
 # test_constante_adversarial.py
-# VPSI-TRUTH — batería adversarial para modules/constante/constante.py
+# VPSI-TRUTH — adversarial battery for modules/constante/constante.py
 #
 # ALPHA = 26/27
 # BETA  = 1/27
 #
-# OBJETIVO
+# OBJECTIVE
 # --------
-# No basta con demostrar que Python puede ejecutar introspección
-# desde Fraction. Hay que demostrar si esa capacidad permite:
+# It is not enough to demonstrate that Python can execute introspection
+# from Fraction. We must demonstrate whether that capability allows:
 #
-#   1. romper el determinismo de derives();
-#   2. modificar ALPHA/BETA;
-#   3. producir una expresión que SPARTACO acepte como válida;
-#   4. alterar el contrato después del intento de ataque.
+#   1. breaking the determinism of derives();
+#   2. modifying ALPHA/BETA;
+#   3. producing an expression that SPARTACO accepts as valid;
+#   4. altering the contract after the attack attempt.
 #
-# La prueba distingue explícitamente:
+# The test explicitly distinguishes:
 #
-#   ESCAPE DE PYTHON
+#   PYTHON ESCAPE
 #       !=
-#   RUPTURA DEL CONTRATO SPARTACO
+#   SPARTACO CONTRACT BREAK
 #
-# Una expresión legítima se deriva exclusivamente del dominio
-# ALPHA/BETA y debe continuar funcionando.
+# A legitimate expression is derived exclusively from the ALPHA/BETA
+# domain and must continue to work.
 #
 # ===============================================================
 
