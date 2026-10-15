@@ -1,58 +1,220 @@
-"""
-UHCR — CUSTOMS INVARIANTS: I-CANON and I-MAN
-SPEC: UHCR-INV-KERNEL-1.3 / CAMPANA C2026-09-CANON-MAN
-
-What is measured here, in one sentence
---------------------------------------
-I-CANON: The canonical boundary (`protection.serialize`) is a TOTAL function
-         over the contractual JSON domain; it REJECTS anything falling outside
-         this domain—DETERMINISTICALLY, without injection, and without
-         interpreter-dependent encoding.
-
-I-MAN:   The manifest is EXACTLY {body, signature}; any other form is
-         rejected with a declared concept, and any mutation to the body,
-         signature, or key is detected.
-
-What is NOT done here
----------------------
-No production code is edited. This file merely CALLS `protection.py`.
-Nothing is declared in writing: every result is derived from a measurement.
-We do not say "PASS." Instead, we report the count (e.g., X out of Y)
-along with the supporting evidence.
-
-Architecture (Klein’s three layers, in miniature)
-------------------------------------------------
-  A  SPECIFICATION  -> `canon_independent()`, written separately from the
-                        audited code, plus the manifest oracle.
-  E  DESIGN         -> `protection.serialize` / `verify_manifest`
-  R  REFINEMENT     -> A and E must match byte-for-byte within the domain.
-  M  MUTATION       -> If a mutant of A or E goes undetected, the
-                        instrument is considered invalid—and this is
-                        explicitly stated, rather than claimed otherwise.
-
-ASCII-ONLY: All new code in this file is strictly pure ASCII by design.
-The only non-ASCII characters that may appear in the report are concept
-names declared by the contract itself (e.g., `CODIGO_INVALIDO` with an
-accent); these are printed exactly as they appear in production,
-without any reinterpretation.
-
-Attempted attacks are tracked and counted. If someone were to obtain an illicit `ALLOW/ok=True`, 
-the verdict of this check would be "BROKEN," and the counter would reveal it.
-
-Scope and Preconditions (read before interpreting any figures)
-------------------------------------------------------------------
-Body fields that `verify()` does not cross-reference against the document are covered by the SIGNATURE. 
-Consequently, re-labeling them requires possession of the authority's private key; this is not a privilege escalation, 
-but rather a re-issuance by the authority itself. This check measures this in two ways:
-
-  - Using the authority's key: the re-labeled manifest validates successfully.
-  - Using a different key (impersonation): it must fail with `INVALID_SIGNATURE`.
-
-What this check does NOT audit: the actual callers of `verify()` or the `minimum_version` they specify 
-(the upper bound is determined by the caller; this check merely verifies that the control exists and functions when invoked),
-interactions involving credentials/AES/HKDF, and the ZSQ tree—which `verify()`
-reports as evidence but does not factor into the final decision.
-"""
+# ===========================================================================
+# SPARTACO-SECURITY — tests/test_canon_man_proteccion.py
+# UHCR — CUSTOMS INVARIANTS: I-CANON and I-MAN
+# SPEC: UHCR-INV-KERNEL-1.3 / CAMPANA C2026-09-CANON-MAN
+# ===========================================================================
+#
+# WHAT IS MEASURED HERE, IN ONE SENTENCE
+# ---------------------------------------------------------------------------
+# I-CANON: the canonical boundary (protection.serialize) is a TOTAL
+#         function over the contractual JSON domain; it REJECTS anything
+#         outside this domain — DETERMINISTICALLY, without injection, and
+#         without interpreter-dependent encoding.
+#
+# I-MAN:   the manifest is EXACTLY {body, signature}; any other form is
+#          rejected with a declared concept, and any mutation to the body,
+#          signature, or key is detected.
+#
+# WHAT IS NOT DONE HERE
+# ---------------------------------------------------------------------------
+# No production code is edited. This file merely CALLS protection.py.
+# Nothing is declared in writing: every result is derived from a
+# measurement. We do not say "PASS." Instead, we report the count (e.g.,
+# X out of Y) along with the supporting evidence.
+#
+# ARCHITECTURE (KLEIN'S THREE LAYERS, IN MINIATURE)
+# ---------------------------------------------------------------------------
+#   A  SPECIFICATION  canon_independiente(), written separately from the
+#                     audited code, plus the manifest oracle
+#                     (cuerpo_valido_espec). The specification is not a
+#                     summary of the code; it is an independent
+#                     reimplementation of the contract.
+#
+#   E  DESIGN         protection.serialize / verify_manifest.
+#
+#   R  REFINEMENT     A and E must match byte-for-byte within the
+#                     domain. Discrepancies are the finding.
+#
+#   M  MUTATION       Six deliberately defective canonicalizers and three
+#                     defective comparators are run against the domain.
+#                     If any mutant goes undetected, the instrument is
+#                     declared INVALID — and this is stated explicitly,
+#                     rather than claimed otherwise.
+#
+# ASCII-ONLY DISCIPLINE
+# ---------------------------------------------------------------------------
+# All new code in this file is strictly pure ASCII by design. The only
+# non-ASCII characters that may appear in the report are concept names
+# declared by the contract itself (e.g., CODIGO_INVALIDO with an
+# accent); these are printed exactly as they appear in production,
+# without any reinterpretation.
+#
+# I-CANON — DOMAIN UNDER MEASUREMENT
+# ---------------------------------------------------------------------------
+# Twenty acceptable cases (None, booleans, empty/ASCII/accented/emoji
+# strings, injection strings, integers, floats, lists, dicts, complex
+# nested mixtures) and twenty-one rejectable cases (bytes, bytearray,
+# tuples, sets, complex numbers, Decimal, Fraction, hostile subclasses
+# of list and dict, OrderedDict, NaN, infinities, 256-bit and 300-bit
+# integers, int/None/float/tuple/bytes keys). Plus five depth cases
+# (62, 63, 64, 65, 70) and two cycle cases (self-referential list and
+# dict). The cycle cases are especially important: a naive serializer
+# hangs or blows the stack.
+#
+# I-CANON — MUTANTS OF THE SPECIFICATION (M LAYER)
+# ---------------------------------------------------------------------------
+# Six deliberately defective canonicalizers must be DETECTED by the
+# specification:
+#
+#   sin_orden_de_claves          keys not sorted
+#   sin_ascii_escapado           UTF-8 instead of ASCII-escaped
+#   con_espacios                 json.dumps with default separators
+#   sin_tope_de_entero           no bit_length limit
+#   sin_tope_de_profundidad      no depth limit
+#   permite_nan                  allow_nan=True
+#
+# If a mutant passes undetected, the instrument is not qualified to
+# claim anything about the audited code.
+#
+# I-CANON — MEASUREMENTS
+# ---------------------------------------------------------------------------
+#   agreements_by_decision      how many cases the audited code decides
+#                               as the specification does
+#   byte_equalities             how many accepted cases match the
+#                               specification byte-for-byte
+#   permutation_determinism     all insertion orders of the same keys
+#                               produce one digest
+#   fixed_point                 serialize → parse → serialize yields the
+#                               same bytes
+#   cross_process_determinism   subprocesses with different
+#                               PYTHONHASHSEED produce the same digest
+#   raw_exceptions              any raw exception is a finding, not a
+#                               rejection
+#
+# I-MAN — MANIFEST VARIANTS
+# ---------------------------------------------------------------------------
+# Signature variants (203 in total):
+#
+#   eleven structural variants     empty, int, None, bytes, lengths 63,
+#                                  65, 127, 129, non-hex, leading space,
+#                                  uppercase
+#   64 bit-flip variants           one bit flipped per byte of the real
+#                                  signature
+#   128 hex-flip variants          one hex character flipped per position
+#
+# Body variants:
+#
+#   per-field mutation             each declared field mutated with type-
+#                                  appropriate alternatives
+#   extra field                    an additional key is added
+#   missing field                  each declared field is removed
+#   re-signed                      each mutation is re-signed with the
+#                                  legitimate authority's private key
+#   unsigned                       each mutation is left with the
+#                                  original signature
+#
+# The distinction between "re-signed" and "unsigned" is critical: the
+# unsigned case must always fail with FIRMA_INVALIDA; the re-signed case
+# must fail only if the body is invalid per the schema. Fields the
+# schema does not bind to the document are covered by the signature
+# alone, and re-labelling them requires the authority's private key.
+#
+# I-MAN — IMPERSONATION PRECONDITION
+# ---------------------------------------------------------------------------
+# The test re-labels artifact_id / clave_publica_id / emitido, signs with
+# a DIFFERENT private key, and verifies rejection with FIRMA_INVALIDA.
+# This is the precondition of everything else. Without it, all other
+# verifications are moot. This is not privilege escalation: it is
+# re-issuance, and only the authority can perform it.
+#
+# I-MAN — version_minima CONTROL
+# ---------------------------------------------------------------------------
+# The manifest is verified with the default version_minima (must accept)
+# and with a version_minima higher than the body's version (must
+# reject). If the second case accepts, the control is ignored and the
+# instrument reports it.
+#
+# I-MAN — MUTANTS OF THE COMPARATOR (M LAYER)
+# ---------------------------------------------------------------------------
+# Three defective comparators must be DETECTED:
+#
+#   acepta_todo              always returns True
+#   rechaza_todo             always returns False
+#   ignora_especificacion    rejects everything except the legitimate case
+#
+# If any passes undetected, the calibration fails.
+#
+# VERDICT VOCABULARY
+# ---------------------------------------------------------------------------
+#   ROTO         some attack obtained an illegal ok=True
+#   ACOTADO      no attack obtained it and every instrument was
+#                qualified
+#   INCONCLUSO   the measuring instrument was not qualified
+#
+# The distinction between ROTO and INCONCLUSO matters: a system can fail
+# because it is genuinely broken, or because the instrument measuring it
+# is not working. The two cases require different responses.
+#
+# SCOPE AND PRECONDITIONS (PUBLISHED IN THE REPORT)
+# ---------------------------------------------------------------------------
+# MEASURED:
+#   - decision and classification of the manifest
+#   - cross-check of nucleo / S / Q / n_bytes against the data
+#   - impersonation without the authority's private key
+#   - version_minima control
+#   - cross-process determinism of the canonical form
+#
+# PRECONDITION:
+#   - Fields covered by signature alone require possession of the
+#     authority's private key. With a different key, rejection was
+#     measured (see SUPLANTACION_SIN_CLAVE). This is not privilege
+#     escalation: it is re-issuance by the authority.
+#
+# NOT AUDITED HERE:
+#   - the callers of verificar() and the version_minima they invoke
+#   - credential / AES / HKDF interactions
+#   - the ZSQ tree, which verificar() reports as evidence but does not
+#     factor into the final decision
+#
+# PERSISTED ARTIFACTS
+# ---------------------------------------------------------------------------
+#   diagnostics/uhcr_inv_canon_man/dossiers/I_CANON_qualification.json
+#   diagnostics/uhcr_inv_canon_man/dossiers/I_CANON_production.json
+#   diagnostics/uhcr_inv_canon_man/dossiers/I_MAN_qualification.json
+#   diagnostics/uhcr_inv_canon_man/dossiers/I_MAN_production.json
+#   diagnostics/uhcr_inv_canon_man/REPORT_CANON_MAN.txt
+#   diagnostics/uhcr_inv_canon_man/METRICS.json
+#
+# ROLE IN THE SUITE
+# ---------------------------------------------------------------------------
+# The adversarial battery attacks the layered architecture of
+# proteccion.py. The metrological kernel audits instruments. The
+# fail-closed auditor qualifies itself against synthetic controls. The
+# universal closure verifies verified == loaded == executed. The
+# transition auditor measures state changes. The RAW causal boundary
+# auditor audits the Engine-provider boundary. The UI auditor verifies
+# the user can recover and download. The rotation suite covers the full
+# lifecycle of a link. The unified hard audit merges the five fronts
+# into a single CI entry. The DVC calibration qualifies the audit
+# motor. This file closes the metrological circle for the protection
+# module: it is not enough that the module passes adversarial tests;
+# one must verify that the specification of the contract is coherent
+# with the implementation, and that the instrument measuring that
+# coherence is sensitive to the defects it should detect.
+#
+# PRINCIPLE
+# ---------------------------------------------------------------------------
+# A canonicalizer that is not total over the domain is not a
+# canonicalizer. A manifest that accepts anything other than {body,
+# signature} is not a manifest. A specification written by re-reading
+# the audited code is not a specification. A mutant of the specification
+# that passes undetected invalidates the measurement. The three layers
+# of Klein are the doctrine: specify independently, refine to
+# byte-for-byte equality, mutate to prove sensitivity. Where the code
+# and the specification disagree, the disagreement is the finding, not
+# a detail.
+#
+# ===========================================================================
 
 from __future__ import annotations
 
