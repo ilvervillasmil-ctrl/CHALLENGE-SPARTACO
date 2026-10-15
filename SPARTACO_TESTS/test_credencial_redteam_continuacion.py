@@ -2,12 +2,71 @@
 # VPSI-TRUTH — test_credencial_redteam_continuacion.py
 # ===============================================================
 #
-# Continuación del red-team que ya pasó en CI (35 tests).
-# Este archivo NO modifica test_credencial_redteam.py.
-# No modifica credencial.py ni proteccion.py.
+# Adversarial red-team continuation for
+#     modules/spartaco_seguridad/credencial.py
 #
-# 14 pruebas que salieron del corte 49→35.
-# Pytest las suma: 795 + 14 = 809.
+# ROLE
+# ----
+# This file is the surgical addendum to test_credencial_redteam.py.
+# The original suite was trimmed 49 → 35 to fit the CI budget.
+# These 14 tests (036–049) are exactly the ones dropped by that cut.
+# They are appended, not rewritten: the parent file is untouched.
+#
+# Pytest accounting: 795 + 14 = 809.
+#
+# CONSTRAINTS
+# -----------
+#   - Does NOT modify test_credencial_redteam.py.
+#   - Does NOT modify credencial.py or proteccion.py.
+#   - Reuses the parent's deterministic fixtures, FixtureError policy,
+#     assert_denegado contract, and snapshot-before/after discipline.
+#   - Reproducible material: sha256(channel || i.to_bytes(8, "big")).
+#   - No secrets, no random, no urandom.
+#
+# WHAT THIS SUITE ADDS OVER THE 35-TEST BASELINE
+# ----------------------------------------------
+#   A. Hostile secret types at the parser boundary .......... 036
+#   B. Defense: invalid branch / invalid event .............. 037–038
+#   C. Defense: mass wrong K_def, no fatigue ................ 039
+#   D. Recovery: legitimate wrap + wrap.ct bitflip .......... 040–041
+#   E. Internal parser and domain-separation checks ......... 042–046
+#        (verificar_dominios, _parse_secreto: hex / b64 /
+#         raw bytes / wrong lengths / garbage)
+#   F. No-mutation under repeated failed auth / recovery .... 047–048
+#   G. Composite invariants on a single document ............ 049
+#
+# Every test targets an angle NOT covered by the 35-test baseline.
+# No test is a duplicate of the parent suite.
+#
+# TEST TAXONOMY
+# -------------
+#   [API/ADVERSARIAL]  — attacks on the public surface.
+#   [INTERNAL/UNIT]    — functional properties of internal
+#                        derivations and parsers (042–046).
+#
+# RESULT CONTRACT (same as parent)
+# --------------------------------
+#   PASS       — attack executed, contract held, state unchanged.
+#   FAIL       — attack accepted, contract broken, or state mutated.
+#   FIXTURE    — attack NOT executed (fixture could not be built).
+#                Never counted as PASS.
+#   EXCEPCION  — API raised where it should have denied.
+#
+# INVARIANTS ENFORCED THROUGHOUT
+# ------------------------------
+#   1. Rejection only via ACCESS_DENIED (ok=False, error, ruta).
+#   2. No rejection path mutates the ZSQ tree.
+#   3. No domain secret authorizes another domain.
+#   4. No uso_id can be replayed.
+#   5. Export never leaks secrets or genealogy.
+#   6. Legitimate protect → open → recover remains intact after
+#      every adversarial run.
+#
+# RUNNER
+# ------
+#   - Discovers all test_* functions.
+#   - Requires exactly TESTS_ESPERADOS = 14, exits 2 otherwise.
+#   - Prints PASS/FAIL per test; exits 0 only with zero failures.
 # ===============================================================
 
 from __future__ import annotations
