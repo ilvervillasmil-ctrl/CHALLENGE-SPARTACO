@@ -1,52 +1,51 @@
 # =============================================================================
-#  UHCR — AUDITORÍA FAIL-CLOSED DE UN RECURSO AISLADO  (ARCHIVO ÚNICO)
+#  UHCR — FAIL-CLOSED AUDIT OF AN ISOLATED RESOURCE (SINGLE FILE)
 # =============================================================================
 #
-#  CÓMO SE USA
-#  -----------
-#  Este archivo es TODO: motor + pruebas. No depende de ningún otro .py.
-#  Para auditar otro recurso:
-#     1. Copia este archivo como   tests/test_<recurso>_failclosed.py
-#     2. Cambia SOLO la línea TARGET (sección 1, justo debajo).
-#  Nada más se toca. La identidad de cada copia queda en tres hashes:
-#   * AUDITOR_SHA256          = H(archivo exacto ejecutado, incluida TARGET)
-#   * AUDITOR_TEMPLATE_SHA256 = H(archivo completo − línea TARGET)
-#       → igual en todas las copias ⇔ las copias son byte a byte idénticas
-#         salvo TARGET (no se acomodó nada tras ver cada recurso).
-#   * AUDITOR_ENGINE_SHA256   = H(sección M exclusivamente: el motor)
-#       → igual en todas las copias ⇔ mismo motor.
-#  Si la línea TARGET no es única o faltan los marcadores de la sección M,
-#  el hash correspondiente es None y el auditor queda NO calificado.
+#  USAGE
+#  -----
+#  This file is all-in-one: engine + tests. It has no dependencies on other .py files.
+#  To audit a different resource:
+#     1. Copy this file as   tests/test_<resource>_failclosed.py
+#     2. Change ONLY the TARGET line (section 1, immediately below).
+#  Nothing else is modified. The identity of each copy is defined by three hashes:
+#   * AUDITOR_SHA256          = H(exact file executed, including TARGET)
+#   * AUDITOR_TEMPLATE_SHA256 = H(complete file − TARGET line)
+#       → identical across all copies ⇔ copies are byte-for-byte identical
+#         except for TARGET (no adjustments made after inspecting the resource).
+#   * AUDITOR_ENGINE_SHA256   = H(section M exclusively: the engine)
+#       → identical across all copies ⇔ same engine.
+#  If the TARGET line is not unique or the section M markers are missing,
+#  the corresponding hash is None and the auditor is deemed UNQUALIFIED.
 #
-#  REGLAS
-#  ------
-#   * REPORT = f(EVIDENCE): todo se deriva del expediente de esta corrida.
-#   * Sin nombres de producción, sin números mágicos, sin roles esperados
-#     escritos a mano: lo que haya que comparar se descubre del propio TARGET.
-#   * AUDIT_SCOPE=ISOLATED_RESOURCE y SYSTEM_WIDE_CLAIM=NO: se mide el
-#     componente por sí solo; no es una afirmación sobre el sistema completo.
-#   * Veredicto por propiedad (familias descubiertas por el motor); nunca un
-#     PASS único mezclado. Ningún PASS sin falsificación ejecutada.
-#   * La evidencia se PERSISTE antes de cualquier aserción
-#     (JSON + index.jsonl en diagnostics/uhcr_resources/<recurso>/).
-#   * INSTRUMENTO (AUDITOR_QUALIFICATION) separado del RECURSO
-#     (TARGET_SECURITY_RESULT): un contraejemplo del recurso no descalifica
-#     al auditor.
+#  RULES
+#  -----
+#   * REPORT = f(EVIDENCE): everything derives from the record of this run.
+#   * No production names, magic numbers, or hard-coded expected roles:
+#     items to be compared are discovered from the TARGET itself.
+#   * AUDIT_SCOPE=ISOLATED_RESOURCE and SYSTEM_WIDE_CLAIM=NO: the component
+#     is measured in isolation; this is not a claim about the entire system.
+#   * Verdict by property (families discovered by the engine); never a
+#     single, aggregated PASS. No PASS without a falsification attempt. #   * Evidence is PERSISTED before any assertion
+#     (JSON + index.jsonl in diagnostics/uhcr_resources/<resource>/).
+#   * INSTRUMENT (AUDITOR_QUALIFICATION) separated from RESOURCE
+#     (TARGET_SECURITY_RESULT): a counterexample regarding the resource does not
+#     disqualify the auditor.
 #
-#  ESTRUCTURA DEL ARCHIVO
-#  ----------------------
-#   1. Recurso a auditar (TARGET)                 ← única línea que cambia
-#   M. MOTOR (descubrimiento AST, roles, falsificación, contabilidad,
-#      registro persistente, informe, autopruebas del motor)
-#   2. Llamada al motor (una sola auditoría + registro persistido)
-#   3. Resolución del recurso
-#   4. Informe y estructura del expediente
-#   5. Veredicto por propiedad (auditor vs recurso)
-#   6. Descripción ≠ aplicabilidad ≠ medición ≠ veredicto
-#   7. Equivalencia wrapper ↔ motor
-#   8. Anti-hardcode del motor
-#   9. Registro de auditoría, identidad de corrida, identidad plantilla/motor y contabilidad
-#   E. Ejecución directa (python3 este_archivo.py [ruta/target.py])
+#  FILE STRUCTURE
+#  --------------
+#   1. Resource to be audited (TARGET)             ← only line that changes
+#   M. ENGINE (AST discovery, roles, spoofing, accounting,
+#      persistent logging, reporting, engine self-tests)
+#   2. Engine call (single audit + persisted log)
+#   3. Resource resolution
+#   4. Report and dossier structure
+#   5. Verdict by property (auditor vs. resource)
+#   6. Description ≠ applicability ≠ measurement ≠ verdict
+#   7. Wrapper ↔ engine equivalence
+#   8. Anti-hardcoding for the engine
+#   9. Audit log, run identity, template/engine identity, and accounting
+#   E. Direct execution (python3 this_file.py [path/target.py])
 # =============================================================================
 """
 UHCR — ISOLATED RESOURCE FAIL-CLOSED AUDITOR (STATIC + selective dynamic)
