@@ -1,4 +1,84 @@
-"""Calibración del lector D6: no inventa APIs que USER no declare."""
+# ===============================================================
+# VPSI-TRUTH — test_d6_lector_calibracion.py
+# ===============================================================
+#
+# D6 reader calibration: it does not invent APIs that USER does
+# not declare.
+#
+# THESIS
+# ------
+# This file audits a single internal component of the D6 probe:
+#     _spartaco_dvc_probe._cuentas_desde_indice(repositorio, alias)
+#
+# The reader must derive accounts exclusively from the API surface
+# that the real repository declares (indice, cargar_perfil). It
+# must NOT rely on helpers USER does not expose (buscar_aliases,
+# buscar_fingerprint, etc.).
+#
+# If the reader depended on an invented helper, D6 would pass
+# against a mock but fail in production with AttributeError — or,
+# worse, produce a false PASS against a mock carrying the fake
+# helper. This file prevents both.
+#
+# SCOPE
+# -----
+#   - Simulated repository exposing ONLY indice() and cargar_perfil().
+#   - Valid state: three users, two sharing alias "repetible",
+#     one with alias "distinto". Coherent fingerprints and profiles.
+#
+#   T1  Reader works with the declared surface only
+#         - The simulated repo has no buscar_aliases attribute.
+#         - _cuentas_desde_indice(repo, 'REPETIBLE') returns exactly
+#           {id_a: fpr_a, id_b: fpr_b}.
+#         - The returned index contains all users, not only matches.
+#         - Alias matching is case-insensitive.
+#
+#   T2  Reader rejects contradictory state (parametrized ×4)
+#         - huella_indice      : fingerprint in index differs from profile.
+#         - huella_perfil      : profile fingerprint is empty.
+#         - perfil_ausente     : user present in index without loadable profile.
+#         - identidad_cruzada  : profile user_id differs from index key.
+#         Each must raise AssertionError matching /D6_/. The reader
+#         must NOT fabricate accounts from corrupt state.
+#
+#   T3  Reader does not invent nonexistent accounts
+#         - Unknown alias returns empty dict, not an error.
+#         - Distinguishes "no match" (legitimate) from "state is
+#           broken" (must abort with D6_ witness).
+#
+# CONTRACT
+# --------
+#   - Contradictory state -> AssertionError whose message contains
+#     a D6_* witness tag. Never a silent value.
+#   - Missing match -> empty dict, no exception.
+#   - Reader never calls helpers absent from the real repository
+#     surface. The subject is not used as its own oracle.
+#
+# CONSTRAINTS
+# -----------
+#   - Does NOT attack credencial.py.
+#   - Does NOT run the full D6 probe.
+#   - Does NOT verify the real system: uses a simulated repository
+#     calibrated to the real declared surface.
+#
+# ROLE IN THE SUITE
+# -----------------
+#   test_credencial_aniquilador.py .......... attacks credencial.py
+#   test_credencial_redteam.py ............... 35 independent attacks
+#   test_credencial_redteam_continuacion.py .. 14 additional attacks
+#   test_D1_D7_... ........................... audits the package
+#                                              as a declaration
+#   test_d6_lector_calibracion.py ............ audits the auditor:
+#                                              the D6 reader is
+#                                              calibrated against
+#                                              the surface USER
+#                                              actually declares.
+#
+# PRINCIPLE
+# ---------
+#   The witness cannot invent facts. The auditor is also audited,
+#   and may only use the API the subject declares it has.
+# ===============================================================
 from __future__ import annotations
 
 import importlib.util
