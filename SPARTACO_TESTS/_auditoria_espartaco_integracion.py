@@ -1,9 +1,8 @@
-"""Prueba de integración real contra el dispatcher, en HOME aislado.
-
-No hay mocks de éxito de autoridades. Únicamente se observan llamadas
-reales y se introduce un rechazo forzado para falsificar la ruta de alta.
-Este archivo NO se autodescubre por pytest; lo ejecuta el test principal
-como subproceso limpio para no compartir sesiones, keysets ni usuarios.
+"""Real integration test against the dispatcher, in an isolated HOME environment.
+There are no mocks for successful authority responses. Only actual calls are observed, 
+and a forced rejection is introduced to simulate a specific registration path. This file 
+is NOT automatically discovered by pytest; it is executed by the main test as a clean subprocess 
+to ensure that sessions, keysets, and users are not shared.
 """
 from __future__ import annotations
 
