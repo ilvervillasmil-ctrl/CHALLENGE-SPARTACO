@@ -1,30 +1,206 @@
-"""
-UHCR — CALIBRACION DEL MICROSCOPIO
-==================================
-
-TEOREMA DE CALIBRACION DEL OBSERVADOR
--------------------------------------
-Sea S una ejecucion del sistema y O_i un regimen instrumental.
-Una diferencia observada entre S|O_i y S|O_j NO se atribuye a S por si sola.
-
-    Delta Obs(O_i,O_j) =/=> Delta Semantica(S)
-
-Antes de usar una magnitud M para juzgar S, el auditor debe medir si M cambia
-materialmente al cambiar solo el observador.
-
-Regimenes, descubiertos sobre el runtime real:
-    O0 MINIMAL      : proceso + resultado/timeout; sin profile/trace.
-    O1 BOUNDARY     : frontera Engine.ejecutar_capacidad para EU/ET.
-    O2 PROFILE      : CALL/RETURN de code objects EU/ET descubiertos.
-    O3 LINE_STATE   : O2 + line tracing con fingerprint de estado observable.
-
-El experimento NO presupone que O0 sea verdad absoluta ni que O3 sea mejor.
-Calibra perturbacion, throughput instrumental, perdida de representacion y
-estabilidad de observables comunes.
-
-PASS = el calibrador produjo evidencia coherente sobre sus propios regimenes.
-PASS =/=> SPARTACO correcto, vulnerable, rapido, lento, fail-closed o completo.
-"""
+# ===========================================================================
+# UHCR — MICROSCOPE CALIBRATION
+# tests/test_uhcr_calibracion_microscopio.py
+# SPEC: UHCR-MICROSCOPE-CALIBRATION-1.1-METROLOGY
+# ===========================================================================
+#
+# OBSERVER CALIBRATION THEOREM
+# ---------------------------------------------------------------------------
+# Let S be an execution of the system and O_i an instrumental regime.
+# An observed difference between S|O_i and S|O_j is NOT attributed to S
+# by itself.
+#
+#     Delta Obs(O_i, O_j) =/=> Delta Semantica(S)
+#
+# Before using a magnitude M to judge S, the auditor must measure
+# whether M changes materially when ONLY the observer changes.
+#
+# REGIMES, DISCOVERED OVER THE REAL RUNTIME
+# ---------------------------------------------------------------------------
+#   O0_MINIMAL      process + result/timeout; no profile, no trace.
+#   O1_BOUNDARY     Engine.ejecutar_capacidad frontier for EU/ET.
+#   O2_PROFILE      CALL/RETURN of EU/ET code objects discovered in
+#                   runtime.
+#   O3_LINE_STATE   O2 + line tracing with fingerprint of observable
+#                   state per line.
+#
+# THESIS
+# ---------------------------------------------------------------------------
+# This file does not measure the system. It measures the instrument
+# that measures the system. It does not presume O0 is the absolute
+# truth nor that O3 is better. It calibrates four properties of the
+# observer:
+#
+#   * perturbation        (does the observer change termination, event
+#                          rate, or depth?)
+#   * instrumental        (how many events per second does each
+#     throughput           regime produce?)
+#   * representational    (does O3 lose state compared to O2, or
+#     loss                 vice versa?)
+#   * stability of        (do the four regimes agree on shared
+#     common observables   observables like termination?)
+#
+# WHAT PASS MEANS HERE
+# ---------------------------------------------------------------------------
+# PASS = the calibrator produced coherent evidence about its own
+# regimes.
+# PASS =/=> SPARTACO is correct, vulnerable, fast, slow, fail-closed,
+# or complete.
+#
+# The two most important fields of the JSON are:
+#     system_semantic_status = "NO_DETERMINADO"
+#     security_verdict       = "NOT_EVALUATED"
+#
+# A calibrator that turned observer sensitivity into a system verdict
+# would violate the theorem.
+#
+# POSITIVE CONTROL OF THE SENSOR
+# ---------------------------------------------------------------------------
+# Before observing the system, each regime runs _synthetic_probe, a
+# synthetic workload with exactly known cardinality. In profile modes,
+# it calls a leaf function SYNTH_CALLS times and expects exactly
+# SYNTH_CALLS call events and SYNTH_CALLS return events. In boundary
+# mode, it counts SYNTH_CALLS synthetic entries and exits. If the
+# sensor does not report exactly what is expected, its calibration is
+# UNQUALIFIED and the file records it.
+#
+# A sensor that does not see a known-cardinality synthetic system has
+# no reason to be trusted on the real system.
+#
+# FRONTIER SELF-QUALIFICATION
+# ---------------------------------------------------------------------------
+# O1's synthetic sensor can pass while the PRODUCTION path never
+# crosses its frontier. The file detects this: if O1's synthetic
+# sensor qualified but production boundary_enter is zero, then
+# production_path_qualified["O1_BOUNDARY"] is set to False.
+#
+# A sensor that works in the lab but intercepts nothing in production
+# does not measure production.
+#
+# EXECUTION MODEL
+# ---------------------------------------------------------------------------
+# Each regime runs in an isolated subprocess using multiprocessing
+# spawn context. The child:
+#   - runs the synthetic probe and reports its calibration;
+#   - imports Engine, instantiates it with strict=True;
+#   - installs the sensor according to the mode;
+#   - runs eng.evaluar_universal({});
+#   - emits events to a queue with checkpoints every
+#     CHECKPOINT_EVERY events;
+#   - keeps a head of the first HEAD_N events and a tail of the last
+#     TAIL_N events, plus full counters.
+#
+# The parent reads from the queue with a deadline of WINDOW seconds,
+# keeps the last checkpoint, and:
+#   - if the child terminated, records termination = RETURN | RAISE;
+#   - if the deadline expired, terminates the child and records
+#     completeness = CHECKPOINT_CENSORED with the last checkpoint as
+#     sample.
+#
+# Censorship is declared, never hidden.
+#
+# PERTURBATION METRICS (DESCRIPTIVE, NOT VERDICT)
+# ---------------------------------------------------------------------------
+# For each regime the file computes:
+#   - instrument_event_rate_per_s     (events confirmed / WINDOW)
+#   - observed_control_call_rate_per_s (calls / WINDOW)
+# and aggregates across regimes:
+#   - termination_stable_across_modes  (all modes agreed on RETURN|RAISE)
+#   - termination_by_mode
+#   - event_rate_by_mode
+#   - control_call_rate_by_mode
+#   - max_depth_observed_by_mode
+#   - sensor_positive_control_qualified
+#   - production_path_qualified
+#
+# The interpretation field is explicitly
+#     "CALIBRATION_ONLY_NOT_SYSTEM_VERDICT".
+#
+# AUDITOR INTEGRITY
+# ---------------------------------------------------------------------------
+# The calibrator self-checks with three rules:
+#   - modes executed in declared order and complete;
+#   - all elapsed times positive;
+#   - all sensors passed their synthetic control.
+#
+# If any rule fails, auditor_integrity = "FAIL" with concrete reasons.
+#
+# PERSISTED ARTIFACTS
+# ---------------------------------------------------------------------------
+#   diagnostics/uhcr_calibracion_microscopio/EVIDENCE.json
+#   diagnostics/uhcr_calibracion_microscopio/METRICS.json
+#   diagnostics/uhcr_calibracion_microscopio/REPORT.txt
+#   diagnostics/test_evidence.json (trace for the diary)
+#
+# All written before any assertion.
+#
+# SEVEN ASSERTIONS
+# ---------------------------------------------------------------------------
+#   test_teorema_calibracion_embebido
+#     the mathematical notation and the four regime names are present.
+#
+#   test_cuatro_regimenes_ejecutados
+#     the four modes ran in declared order.
+#
+#   test_calibrador_no_emite_veredicto_semantico
+#     system_semantic_status == "NO_DETERMINADO" and
+#     security_verdict       == "NOT_EVALUATED".
+#
+#   test_metricas_instrumentales_no_negativas
+#     no counter is negative and elapsed times are positive.
+#
+#   test_integridad_calibrador
+#     auditor_integrity == "PASS".
+#
+#   test_control_positivo_de_cada_sensor
+#     each mode passed its synthetic positive control.
+#
+#   test_frontera_no_se_autocalifica
+#     if O1's synthetic sensor qualified but production boundary_enter
+#     is zero, then production_path_qualified["O1_BOUNDARY"] is False.
+#
+#   test_99_traza
+#     publishes the report to diagnostics/test_evidence.json for the
+#     Omega Diary.
+#
+# WHAT THIS FILE IS NOT
+# ---------------------------------------------------------------------------
+#   - It does not attack any module.
+#   - It does not qualify an external instrument.
+#   - It does not audit an isolated resource.
+#   - It does not verify a closure, a theorem of purity of construction
+#     or the equality verified == loaded == executed.
+#   - It does not certify the whole system.
+#   - It does not attribute observer sensitivity to the system.
+#
+# ROLE IN THE SUITE
+# ---------------------------------------------------------------------------
+# The adversarial battery attacks the layered architecture of
+# proteccion.py. The credential red-teams attack credencial.py. The
+# metrological kernel audits the instruments. The integration smoke
+# test checks the honest end-to-end path. The monitor correlates
+# external and internal observation. The fail-closed auditor qualifies
+# itself against synthetic controls. The seal closure test verifies
+# that declared algebra is physically operated. The universal closure
+# verifies that what is verified equals what is loaded equals what is
+# executed. The enablement theorem verifies purity of construction.
+# The total attack campaign measures coherence and attributability of
+# the suite. This file calibrates the microscope itself: it measures
+# the perturbation that the act of measuring introduces, and refuses
+# to convert that perturbation into a semantic verdict about the
+# system.
+#
+# PRINCIPLE
+# ---------------------------------------------------------------------------
+# A difference observed between two instruments is a property of the
+# instruments until proven otherwise. A calibrator that confuses
+# observer sensitivity with system semantics is worse than no
+# calibrator. This file measures four regimes against a synthetic
+# positive control of known cardinality, publishes the perturbation
+# without attribution, and declares the system's semantic status as
+# NOT_DETERMINED and the security verdict as NOT_EVALUATED, by design.
+#
+# ===========================================================================
 from __future__ import annotations
 import hashlib, inspect, json, multiprocessing as mp, os, queue, sys, time
 from pathlib import Path
