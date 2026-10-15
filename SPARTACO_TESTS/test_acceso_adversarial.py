@@ -263,7 +263,7 @@ def test_05b_politica_denegada_consume_nonce(claves):
     assert v2["estado"] == A.BLOQUEADO and "NONCE_REUSADO" in v2["conceptos"], v2
 
 
-# ---------------------------------------------------------------- 06 almacÃ©n que lanza excepciÃ³n
+# ---------------------------------------------------------------- 06 almacen que lanza excepcion
 def test_06_almacen_excepcion_fail_closed(claves):
     priv, pub = claves
     s = construir(priv)
