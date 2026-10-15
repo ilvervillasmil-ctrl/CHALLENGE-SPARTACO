@@ -1,14 +1,14 @@
 # ===============================================================
-#  test_acceso_adversarial.py  (v1.3 â€” alineado con acceso.py corregido)
+#  test_acceso_adversarial.py  (v1.3 — aligned with the corrected acceso.py)
 # ===============================================================
-# Batería adversarial para modules/spartaco_seguridad/acceso.py
+# Adversarial test suite for modules/spartaco_seguridad/acceso.py
 #
-# Cubre: flujo legítimo (debe AUTORIZAR), replay del mismo nonce,
-# firma válida reutilizada sobre otro 'acceso', reloj futuro,
-# TTL expirado, política ausente, almacén que lanza excepción
-# (fail-closed), carrera de 2 y de 20 hilos sobre el MISMO nonce
-# (atomicidad del consumo) y consumo temprano (política denegada
-# NO deja el nonce reutilizable).
+# Covers: legitimate flow (must AUTHORIZE), replay of the same nonce,
+# reuse of a valid signature for a different 'access' request, future timestamp,
+# expired TTL, missing policy, storage-layer exception
+# (fail-closed behavior), race conditions (2 and 20 threads) targeting the SAME nonce
+# (atomicity of consumption), and premature consumption (a denied policy
+# does NOT leave the nonce available for reuse).
 # ===============================================================
 from __future__ import annotations
 
