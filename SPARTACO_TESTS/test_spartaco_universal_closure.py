@@ -1,73 +1,245 @@
-# ===============================================================
-# tests/test_spartaco_universal_closure.py
+# ===========================================================================
+# SPARTACO-SECURITY — tests/test_spartaco_universal_closure.py
+# VPSI-TRUTH — UNIVERSAL ADVERSARIAL CLOSURE
+# ===========================================================================
 #
-# VPSI-TRUTH — CIERRE UNIVERSAL ADVERSARIAL
-# ===============================================================
+# OBJECTIVE
+# ---------------------------------------------------------------------------
+# Try to break the closure of Spartaco from every frontier demonstrable
+# through the real contract known:
 #
-# OBJETIVO
-# --------
-# Intentar romper el cierre de Spartaco desde todas las fronteras
-# demostrables mediante el contrato real conocido:
+#     CT
+#     BUILD
+#     INTEGRATION
+#     PROTECTION
+#     CREDENTIAL
+#     MANIFEST
+#     VERIFICATION
+#     LAUNCHER
+#     LOAD
+#     EXEC
 #
-#   CT
-#   BUILD
-#   INTEGRACIÓN
-#   PROTECCIÓN
-#   CREDENCIAL
-#   MANIFIESTO
-#   VERIFICACIÓN
-#   LAUNCHER
-#   LOAD
-#   EXEC
-#
-# PRINCIPIO CENTRAL
-# -----------------
-#
-#     LO VERIFICADO
+# CENTRAL PRINCIPLE
+# ---------------------------------------------------------------------------
+#     WHAT IS VERIFIED
 #          ==
-#     LO CARGADO
+#     WHAT IS LOADED
 #          ==
-#     LO EJECUTADO
+#     WHAT IS EXECUTED
 #
-# Un sistema que verifica X y ejecuta Y está roto aunque X tenga
-# una firma criptográficamente perfecta.
+# A system that verifies X and executes Y is broken even if X has a
+# cryptographically perfect signature. This is the property the whole
+# file measures, and every section is structured to detect any fracture
+# in that equality.
 #
-# REGLA DE CIERRE
-# ---------------
-#
-# Un ataque no autorizado debe terminar siempre en:
+# CLOSURE RULE
+# ---------------------------------------------------------------------------
+# An unauthorized attack must always end in:
 #
 #     autorizado == False
 #     ejecutado  == False
 #
-# Nunca se considera PASS un simple rechazo si existe evidencia
-# de ejecución del Kernel.
+# The conjunction is mandatory. A mere rejection is never considered
+# PASS if there is evidence of Kernel execution.
 #
-# NO SE INVENTAN APIs
-# -------------------
+# NO INVENTED APIs
+# ---------------------------------------------------------------------------
+# Only APIs observed in the contract are used:
 #
-# Se utilizan únicamente APIs observadas en el contrato:
+#     A.construir_integrado
+#     A.leer_integrado
+#     A.sellar_integrado
+#     A.verificar_integrado
+#     A.extraer_kernel
+#     A.custodia
+#     A.inventariar_perimetro
+#     A._empaquetar
 #
-#   A.construir_integrado
-#   A.leer_integrado
-#   A.sellar_integrado
-#   A.verificar_integrado
-#   A.extraer_kernel
-#   A.custodia
-#   A.inventariar_perimetro
-#   A._empaquetar
+#     P.generar_claves
+#     P.build
+#     P.verificar
+#     P.nucleo
 #
-#   P.generar_claves
-#   P.build
-#   P.verificar
-#   P.nucleo
+#     L.verificar_y_ejecutar
+#     L.cargar_manifiesto
 #
-#   L.verificar_y_ejecutar
-#   L.cargar_manifiesto
+# The test does NOT invent lanzar_integrado().
 #
-# El test NO inventa lanzar_integrado().
+# INFRASTRUCTURE
+# ---------------------------------------------------------------------------
+#   - A small C kernel is compiled at runtime with gcc. It writes "46\n"
+#     to stdout and returns 46 as exit code. This is the object of the
+#     launcher tests: it is sealed with proteccion.build, saved with its
+#     manifest, and verified with launcher.verificar_y_ejecutar in
+#     subprocess mode.
+#   - An INDEPENDENT PARSER of the VPSI-INTEGRA format that does not
+#     call any function of the arranque module. It reads magic, splits
+#     metadata JSON from binary body, walks entries verifying NUL-
+#     terminated paths, length consistency, and no duplicate routes.
+#   - An INDEPENDENT ORACLE of the block condition: exige_bloqueo
+#     compares the legitimate control against the attacked package and
+#     requires the control to authorize, the attack to block with both
+#     authorization false and execution false, and the surfaces to
+#     actually differ (otherwise the attack tests nothing).
 #
-# ===============================================================
+# WHAT THIS FILE IS
+# ---------------------------------------------------------------------------
+# The universal closure of the suite. It verifies the FULL CHAIN from
+# the central cube to kernel execution, covering every frontier
+# between layers. The principle "what is verified is what is loaded is
+# what is executed" is not declared; it is measured at every frontier.
+#
+# TWO PHYSICAL SURFACES
+# ---------------------------------------------------------------------------
+#   SURFACE 1 — Integrated package (arranque / VPSI-INTEGRA):
+#       magic + metadata JSON + binary body
+#       contains kernel/imagen and all live modules of the package
+#       verified by A.verificar_integrado, extracted by A.extraer_kernel
+#
+#   SURFACE 2 — Sealed ELF (launcher):
+#       a direct executable with signed manifest
+#       verified and executed by L.verificar_y_ejecutar
+#
+# Each surface is verified separately, attacked separately, and crossed
+# with the other to verify the system does not confuse one with the
+# other.
+#
+# SECTIONS
+# ---------------------------------------------------------------------------
+#
+#   000  Repository: imports, SEGURIDAD ids, declared capabilities,
+#        launcher export surface.
+#   010  CT (central cube): exact arithmetic of ALPHA/BETA, axis
+#        divisions, custodia accepts the live cube, rejects a broken
+#        ALPHA, BETA or axis.
+#   020  Raw kernel: compiled kernel produces exit 46 and "46" in stdout.
+#   030  Launcher: sealed kernel executes with exit 46; missing manifest
+#        yields MANIFIESTO_AUSENTE; mutated ELF fails to verify and does
+#        not execute.
+#   040  Architectural gap: the launcher does NOT execute the integrated
+#        VPSI-INTEGRA package. Neither arranque nor launcher expose
+#        lanzar_integrado. This is documented debt, not a hidden bug.
+#   050  Physical format: magic, independent parser extracts
+#        kernel/imagen and all live modules, hash matches both the
+#        declared nucleo and P.nucleo, channels match the independent
+#        calculation, kernel is not the package itself.
+#   060  Internal Spartaco vs external: the package contains a byte-
+#        for-byte copy of arranque.py; the external file is a real .py.
+#   070  Seal: verificar_integrado authorizes; extraer_kernel returns
+#        exactly the original kernel bytes.
+#   080  Physical tamper: byte flips at 0, 1, mid, -2, -1; truncation;
+#        append; empty file. All must block.
+#   090  Manifest / envelope: mutated manifest, mutated cryptographic
+#        envelope. Both must block.
+#   100  Internal Spartaco mutation: mutate arranque.py inside the
+#        package, repackage, expect block. Mutate kernel/imagen inside
+#        the package, repackage, expect block.
+#   110  Cross substitution: B with envelope of A, B with credentials
+#        of A, A with auth secret of B, A with session secret of B.
+#        All must block.
+#   120  Absences: no manifest, no pub, no auth secret. All must block.
+#   130  Path traversal: the independent parser reads ../escape,
+#        /tmp/escape, "", ".", ".." as-is. The parser is a reader, not
+#        a guard. Path validation belongs to a higher layer.
+#   140  Structural duplication: two entries with the same route,
+#        parser reports ruta-duplicada.
+#   150  Malformed lengths: internal length exceeding package size;
+#        truncated header. Both rejected.
+#   160  Combined corruption: prefix, suffix, doubling, middle byte
+#        insertion. All must block.
+#   170  Perimeter: inventariar_perimetro over a temporary directory
+#        reports at least one file and positive total bytes.
+#   180  Verification concurrency: 20 threads with a Barrier, all
+#        results ok=True. Verification is a pure function without
+#        shared mutable state.
+#   190  Launcher replay is idempotent for the same ELF. Two
+#        executions, both ok=True with exit 46.
+#   200  Integrated replay is idempotent for the same package. Two
+#        verifications, both ok=True.
+#   210  Cross identity: same semantic identifier is not enough. A's
+#        infrastructure with B's content must block.
+#   220  Mutated launcher kernel: byte mutation, launcher fails to
+#        verify, kernel does not execute, "46" not in stdout.
+#   230  Adversarial environment: launcher does not depend on PATH or
+#        PWD. Empty PATH and hostile PWD both yield correct execution.
+#   240  Executable vs artifact: file without execute permission
+#        reports ejecutado=False, no crash.
+#   250  Semantic manifest: mutation of artifact_id, authority_id,
+#        version, n_bytes, nucleo. All must block.
+#   260  Non-canonical JSON: reordered manifest. The test does not
+#        impose PASS/FAIL; it records that the implementation decided
+#        a canonicalization semantics.
+#   270  Source / AST: verificar_y_ejecutar is a defined function in
+#        the launcher source.
+#   280  Import path: arranque.__file__ is under modules/ with
+#        spartaco_seguridad in its path.
+#   290  Internal code substitution: every live module of the package
+#        is present inside the integrated package.
+#   300  Perimeter fingerprint: deterministic hash per internal file.
+#   310  Credential failure: auth or session secret mutated. Both must
+#        block.
+#   320  Cryptographic truncation: envelope truncated to 0, 1, 2, 8,
+#        16, 31 bytes. All must block.
+#   330  Atomic replacement: os.replace the legitimate ELF with a
+#        mutated ELF. Deterministic approximation to the VERIFY/LOAD
+#        frontier: the launcher verifies what it loads.
+#   340  Symlink: symlink to a mutated ELF must block.
+#   350  Total absence: nonexistent artifact does not execute.
+#   360  Recursion: the package does not contain its own complete image.
+#   370  Kernel closure: extracting the kernel is not executing it; the
+#        extracted bytes contain "46" but are not run.
+#   380  Post-authorization attack documented: the launcher is
+#        idempotent for the same ELF. Anti-replay is not declared
+#        because the observed contract does not provide a nonce /
+#        consumption policy for this operation.
+#   390  Cross version: B is legitimate; A with envelope of B blocks.
+#   400  Full reconstruction: compile, integrate, seal, verify, extract
+#        — extracted bytes match the original kernel.
+#   401  Full launcher reconstruction: compile, seal, execute, exit 46,
+#        "46" in stdout.
+#   410  Final security closure: legitimate package authorizes. The
+#        test does not allow this condition to be inverted.
+#   420  Explicit detection of the main gap: the launcher cannot
+#        execute the integrated package. A and L are distinct surfaces.
+#
+# ARCHITECTURAL DEBT (documented, not hidden)
+# ---------------------------------------------------------------------------
+#   G1  The launcher does not execute the integrated VPSI-INTEGRA
+#       package. Neither arranque nor launcher expose lanzar_integrado.
+#       If this API appears in the future, tests 041 and 420 must
+#       change. Today they document that the two surfaces are distinct.
+#   G2  The launcher is idempotent regarding the same ELF. Anti-replay
+#       is not declared because the observed contract does not provide
+#       a nonce or consumption policy for this operation.
+#   G3  The independent VPSI-INTEGRA parser reads path traversal
+#       entries as-is. The parser is a reader, not a guard. Path
+#       validation belongs to a higher layer.
+#
+# ROLE IN THE SUITE
+# ---------------------------------------------------------------------------
+# The adversarial battery attacks the layered architecture of
+# proteccion.py. The credential red-teams attack credencial.py. The
+# metrological kernel audits the instruments. The integration smoke
+# test checks the honest end-to-end path. The monitor correlates
+# external and internal observation. The fail-closed auditor qualifies
+# itself against synthetic controls. The seal closure test verifies
+# that declared algebra is physically operated. The demolition battery
+# piles layered architectural pressure on proteccion.py. The base
+# adversarial battery declares the manifest contract. This file gives
+# the universal closure: it verifies that the complete system, from
+# the central cube to kernel execution, maintains coherence between
+# what it verifies and what it executes.
+#
+# PRINCIPLE
+# ---------------------------------------------------------------------------
+# A system that verifies one thing and executes another is broken even
+# when the signature is perfect. This file measures the equality at
+# every frontier. Where the equality does not hold — the launcher does
+# not execute the integrated package — it documents the gap instead of
+# hiding it, and fixes in code the architectural decision that the two
+# surfaces are distinct.
+#
+# ===========================================================================
 
 from __future__ import annotations
 
