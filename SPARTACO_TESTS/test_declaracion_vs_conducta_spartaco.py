@@ -1,7 +1,100 @@
-"""D1–D7 SPARTACO: declaración contra conducta; el PASS necesita testigo.
-
-Añadir SOLO a tests/. Ni usuario ni CI se modifica. Subprocesos aislados.
-"""
+# ===============================================================
+# VPSI-TRUTH — test_D1_D7_spartaco_declaracion_vs_conducta.py
+# ===============================================================
+#
+# D1–D7 SPARTACO: declaration vs. conduct; a PASS needs a witness.
+#
+# THESIS
+# ------
+# This suite audits the whole spartaco_seguridad package plus its UI
+# and its CI. It does NOT trust what a module SAYS it does. It verifies
+# what the module actually DOES, using measurable external evidence:
+#
+#   1. A comment is not a proof. "This module does not encrypt" in a
+#      docstring is worthless; the AST must show it imports no crypto
+#      engine and delegates to the authority.
+#   2. An ok=True is not a PASS. Only ok=False + ACCESS_DENIED counts
+#      as a contractual rejection.
+#   3. A workflow that prints PASS is not a result. A PASS must come
+#      from pytest + JUnit XML, not from a literal embedded in YAML.
+#
+# SCOPE
+# -----
+#   D1  Inventory and declarations against runtime
+#         Every declared public/internal capability must be callable,
+#         unique within its resource, and consistent with the
+#         inventory (id, capacidades_recurso, source file, no public
+#         duplicates in the AST).
+#
+#   D2  Invalid inputs are rejected without creating a session
+#         Five hostile inputs against user.py must return ok=False
+#         with no session_id. No accidental exception, no silent
+#         acceptance.
+#
+#   D3  Dependency maps resolve to real authorities
+#         Every entry in user.py's dependency maps must exist and be
+#         callable in the package.
+#
+#   D4  Catalog and signatures match the inventory
+#         spartaco_ui.capa_universal.ACCIONES_MAP vs. inventory;
+#         CAMPOS vs. inspect.signature(func). The inventory cannot
+#         legitimize ghost actions nor invented fields.
+#
+#   D5  user does not implement crypto and delegates to credencial
+#         Proven by AST, not by comments:
+#           - user.py: no illegal crypto imports; delegation of
+#             CredencialUser.cerrar/abrir, _cerrar_puerta and
+#             entrar_con_paquetes to the crypto authority.
+#           - capa_universal.py: stdlib-only imports.
+#           - Spartaco_UI.py / interfaz_3.py: no literal crypto
+#             decrypt patterns (crypto.subtle.decrypt, new AESGCM(,
+#             fernet.decrypt().
+#
+#   D6  Real authorities: 2 accounts, forgeries and rollback
+#         End-to-end probe in an isolated subprocess:
+#           - HOME / USERPROFILE / ESPARTACO_DVC_HOME redirected
+#             to a temp dir.
+#           - Python -I (isolated mode).
+#           - Exactly one SONDA_FINAL JSON.
+#           - Unique D6_* evidence tags, no duplicates.
+#           - Contabilidad: evidencias == len(pruebas).
+#           - 2 verified account creations, >0 rejected forgeries,
+#             and credencial actually executed (open/close counters
+#             > 0).
+#
+#   D7  CI publication does not fabricate results
+#         Inspects .github/workflows:
+#           - No PASS/OK literals used as data.
+#           - ci.yml must invoke pytest tests/, produce --junit-xml,
+#             and NOT use continue-on-error: true.
+#         D7 audits CONFIGURATION, not the Actions run result.
+#
+# METHOD
+# ------
+#   - Loaded via _spartaco_dvc_motor.py (M) for AST, signature,
+#     inventory, and reporting helpers.
+#   - D6 executed via _spartaco_dvc_probe.py in a subprocess.
+#   - Every test accumulates evidence rows and calls
+#     M.reportar_y_exigir(filas, 'Dn').
+#
+# CONSTRAINTS
+# -----------
+#   - Adds only to tests/. Does NOT modify user code or CI.
+#   - Deterministic and isolated (no host contamination).
+#   - No subject used as its own oracle.
+#   - Unverifiable properties are reported via no_medible, never
+#     converted into a silent PASS.
+#
+# RELATION TO THE REST OF THE SUITE
+# ---------------------------------
+#   test_credencial_aniquilador.py .......... attacks credencial.py
+#   test_credencial_redteam.py ............... 35 independent attacks
+#   test_credencial_redteam_continuacion.py .. 14 additional attacks
+#   test_D1_D7_... ........................... audits the package as
+#                                              a declaration: what it
+#                                              says it is vs. what it
+#                                              can be measured to do.
+# ===============================================================
 from __future__ import annotations
 
 import importlib
