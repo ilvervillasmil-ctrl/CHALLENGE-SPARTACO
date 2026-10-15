@@ -1,55 +1,53 @@
 """
-SPARTACO SECURITY — ATAQUE REAL DE COMPROMISO TOTAL DEL PLANO DE FIRMA
+SPARTACO SECURITY — REAL-WORLD ATTACK: TOTAL COMPROMISE OF THE SIGNING PLANE
 ======================================================================
 
-OBJETIVO
+OBJECTIVE
 --------
-Demostrar experimentalmente si un atacante que posee simultáneamente:
+To experimentally demonstrate whether an attacker possessing all of the following simultaneously:
 
-    - documento .spartaco REAL
-    - manifiesto REAL completo
-    - clave pública Ed25519 REAL
-    - clave privada Ed25519 REAL
-    - conocimiento del formato
-    - conocimiento de AES-256-GCM / HKDF-SHA256
-    - posibilidad de usar librerías criptográficas maduras
-    - posibilidad de invocar el motor legítimo CREDENCIAL
+    - a REAL .spartaco document
+    - a complete REAL manifest
+    - a REAL Ed25519 public key
+    - a REAL Ed25519 private key
+    - knowledge of the format
+    - knowledge of AES-256-GCM / HKDF-SHA256
+    - the ability to use mature cryptographic libraries
+    - the ability to invoke the legitimate CREDENCIAL engine
 
-puede recuperar el plaintext SIN poseer el material secreto correcto de
-autenticación/sesión/recuperación.
+can recover the plaintext WITHOUT possessing the correct authentication/session/recovery secret material.
 
-NO ES UN TEST TEÓRICO.
-Usa los cuatro artefactos reales.
+THIS IS NOT A THEORETICAL TEST.
+It uses the four real artifacts.
 
-PROPIEDADES QUE ATACA
+ATTACKED PROPERTIES
 ---------------------
-A) Descifrado externo sin SPARTACO.
-B) Derivación abusiva desde claves Ed25519 y metadata pública.
-C) Abuso del wrap de recuperación.
-D) Uso del propio motor CREDENCIAL como posible oráculo.
-E) Uso de secreto raíz/auth/session/recovery derivados del material robado.
-F) Confusión de dominios: firma -> cifrado / recuperación.
-G) Control estructural de que .priv realmente corresponde a .pub.
+A) External decryption without SPARTACO.
+B) Unauthorized derivation from Ed25519 keys and public metadata.
+C) Abuse of the recovery wrap.
+D) Use of the CREDENCIAL engine itself as a potential oracle.
+E) Use of root/auth/session/recovery secrets derived from the stolen material.
+F) Domain confusion: signing -> encryption / recovery.
+G) Structural verification that .priv actually corresponds to .pub.
 
-REGLA DE ÉXITO DEL ATACANTE
+ATTACKER SUCCESS CRITERIA
 ---------------------------
-El atacante gana si obtiene un plaintext autenticado por AES-GCM usando
-exclusivamente material disponible en los cuatro artefactos comprometidos,
-o si el motor SPARTACO devuelve ok=True/plaintext con uno de esos candidatos.
+The attacker succeeds if they obtain an AES-GCM authenticated plaintext using
+exclusively material available in the four compromised artifacts,
+or if the SPARTACO engine returns ok=True/plaintext with one of those candidates.
 
-El test NO considera "éxito" observar hashes, tamaños, IDs o metadata pública.
+The test does NOT consider observing hashes, sizes, IDs, or public metadata as "success."
 
-IMPORTANTE
+IMPORTANT
 ----------
-Este test no pretende "fuerza bruta de 2^256". Eso no sería una prueba útil.
-Busca vulnerabilidades de implementación y de separación de dominios:
-reutilización de claves, KDF mal ligada, secretos derivados de información
-pública, confusión Ed25519/AES, recuperación expuesta, o motor convertido en
-oráculo de apertura.
+This test does not aim for "2^256 brute force." That would not be a useful test. It looks for implementation and domain separation vulnerabilities:
+key reuse, loosely bound KDF, secrets derived from public
+information, Ed25519/AES confusion, exposed recovery, or an engine
+turned into an opening oracle.
 
 FIXTURES
 --------
-Por defecto busca:
+By default, it looks for:
 
 tests/fixtures/spartaco_compromiso_total/
     spartaco_firma 2.pub
@@ -57,13 +55,13 @@ tests/fixtures/spartaco_compromiso_total/
     recursive_audit.pdf.spartaco
     recursive_audit.pdf.spartaco.manifest.json
 
-También acepta:
-    SPARTACO_ATTACK_FIXTURES=/ruta/al-directorio
+It also accepts:
+    SPARTACO_ATTACK_FIXTURES=/path/to-directory
 
-Si los cuatro no están, el test NACE el par Ed25519 con
-proteccion.generar_claves y el sobre con credencial.proteger.
-El IKM de autenticacion/defensa/sesion/recuperacion es distinto
-del par de firma y no se escribe en los artefactos de ataque.
+If all four are not present, the test generates the Ed25519 pair using
+proteccion.generar_claves and the envelope using credencial.proteger.
+The authentication/defense/session/recovery IKM is distinct
+from the signing pair and is not written to the attack artifacts.
 """
 
 from __future__ import annotations
