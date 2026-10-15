@@ -1,8 +1,68 @@
 # ===============================================================
 # test_credencial_aniquilador.py
-# Batería adversarial integral — credencial.py v2.2
-# Un solo archivo. No modifica producción.
-# Determinista: sin secrets, random, urandom.
+# VPSI-TRUTH — comprehensive adversarial battery for credencial.py v2.2
+#
+# OBJECTIVE
+# ---------
+# Verify that credencial.py resists attacks without the private key,
+# without mutating the ZSQ tree, and without authorizing unauthenticated
+# inputs.
+#
+# SCOPE
+# -----
+# KDF (derivar_claves):
+#   - 4 keys (auth / defense / encryption / recovery) without collision.
+#   - Real context dependency (artifact_id, nucleo, authority_id).
+#   - root_secret mode vs. separate secrets (auth/def/ses/rec).
+#
+# Opening (abrir_documento):
+#   - Malformed blob: truncated JSON, invalid UTF-8, multiple SEP,
+#     concatenated blobs, garbage before/after, empty ciphertext.
+#   - Header: types and ranges in schema, version, IDs, algorithm,
+#     kdf, salt, nonce, emission, ct_len, digests, tags, nucleo.
+#   - Ciphertext: bit flip.
+#   - Crossovers: header A←B; blobA+manB; blobA+pubB; blobB+manA; blobB+pubA.
+#   - Signature: empty, truncated, extended, flipped, B, mutated body,
+#     no signature, no body.
+#   - K_rec must not open through the authentication channel.
+#   - Without pub or secrets: deny (dangerous defaults).
+#
+# Replay / concurrency:
+#   - consumed usage_id: at most 1 authorization.
+#   - 2/10/20/50/100 threads with same usage_id: exactly 1 ok.
+#   - 28 threads with mixed operations: no exceptions and ≤1 open_ok.
+#
+# Defense (registrar_intento / resetear_defensa):
+#   - Only legitimate K_def expands ZSQ (branches Z, S, Q).
+#   - Foreign secrets (garbage, auth, session, recovery) deny.
+#   - Legitimate reset returns to ROOT; reset with foreign secret denies.
+#
+# Recovery (recuperar):
+#   - Legitimate K_rec path works; foreign secrets deny.
+#   - B's wrap_recovery over A must not cross-recover.
+#
+# State / persistence:
+#   - exportar_estado does not expose parent_id, children, or commitment.
+#   - importar_estado rejects fake nodes.
+#   - Ticket rollback via importar_estado does not revive consumed ones.
+#   - resetear_defensa does not revive an already spent usage_id.
+#
+# Final invariants:
+#   - Legitimate document still opens and recovers.
+#   - Failed attacks do not mutate the ZSQ tree.
+#   - Cross identity (A with B) is always denied.
+#
+# LEVELS
+# ------
+#   CRITICAL — breaks authorization, crosses identity, or mutates state.
+#   HIGH     — uncontrolled exception or missing validation.
+#   MEDIUM   — contract/API deviation, not exploitable.
+#
+# PROPERTIES
+# ----------
+#   Deterministic: no secrets, random, or urandom.
+#   Does not modify production.
+#   Single file, self-contained.
 # ===============================================================
 
 from __future__ import annotations
