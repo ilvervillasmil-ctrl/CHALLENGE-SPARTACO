@@ -1,57 +1,57 @@
 """
-UHCR \u2014 INVARIANTES DE ADUANA: I-CANON E I-MAN
+UHCR — CUSTOMS INVARIANTS: I-CANON and I-MAN
 SPEC: UHCR-INV-KERNEL-1.3 / CAMPANA C2026-09-CANON-MAN
 
-Que se mide aqui, en una frase
-------------------------------
-I-CANON: la frontera canonica (proteccion.serializar) es una funcion TOTAL
-         sobre el dominio JSON contractual y RECHAZA todo lo que queda fuera,
-         de forma DETERMINISTA, sin inyeccion y sin codificacion dependiente
-         del interprete.
+What is measured here, in one sentence
+--------------------------------------
+I-CANON: The canonical boundary (`protection.serialize`) is a TOTAL function
+         over the contractual JSON domain; it REJECTS anything falling outside
+         this domain—DETERMINISTICALLY, without injection, and without
+         interpreter-dependent encoding.
 
-I-MAN:   el manifiesto es EXACTAMENTE {cuerpo, firma}; cualquier otra forma
-         se rechaza con un concepto declarado, y toda mutacion de cuerpo,
-         firma o clave se detecta.
+I-MAN:   The manifest is EXACTLY {body, signature}; any other form is
+         rejected with a declared concept, and any mutation to the body,
+         signature, or key is detected.
 
-Que NO se hace aqui
--------------------
-No se edita produccion. Este archivo solo LLAMA a proteccion.py.
-No se declara nada por escrito: cada resultado sale de una medicion.
-No se dice "PASS". Se dice cuantos de cuantos, y con que evidencia.
+What is NOT done here
+---------------------
+No production code is edited. This file merely CALLS `protection.py`.
+Nothing is declared in writing: every result is derived from a measurement.
+We do not say "PASS." Instead, we report the count (e.g., X out of Y)
+along with the supporting evidence.
 
-Arquitectura (las tres capas de Klein, en miniatura)
-----------------------------------------------------
-  A  ESPECIFICACION  -> canon_independiente(), escrita aparte del codigo
-                        auditado, y el oraculo de manifiesto.
-  E  DISENO          -> proteccion.serializar / verificar_manifiesto
-  R  REFINAMIENTO    -> A y E deben coincidir byte a byte en el dominio.
-  M  MUTACION        -> si un mutante de A o de E NO se detecta, el
-                        instrumento no vale y se dice, en vez de afirmarlo.
+Architecture (Klein’s three layers, in miniature)
+------------------------------------------------
+  A  SPECIFICATION  -> `canon_independent()`, written separately from the
+                        audited code, plus the manifest oracle.
+  E  DESIGN         -> `protection.serialize` / `verify_manifest`
+  R  REFINEMENT     -> A and E must match byte-for-byte within the domain.
+  M  MUTATION       -> If a mutant of A or E goes undetected, the
+                        instrument is considered invalid—and this is
+                        explicitly stated, rather than claimed otherwise.
 
-ASCII-ONLY: todo el codigo nuevo de este archivo es ASCII puro a proposito.
-Los unicos caracteres no ASCII que pueden aparecer en el informe son los
-nombres de concepto que el propio contrato declara (p.ej. CODIGO_INVALIDO
-con acento), y se imprimen tal cual vienen de produccion, nunca
-reinterpretados.
+ASCII-ONLY: All new code in this file is strictly pure ASCII by design.
+The only non-ASCII characters that may appear in the report are concept
+names declared by the contract itself (e.g., `CODIGO_INVALIDO` with an
+accent); these are printed exactly as they appear in production,
+without any reinterpretation.
 
-Los ataques intentados se cuentan. Si alguno consiguiera un ALLOW/ok=True
-ilegal, el veredicto de la campana es ROTO y el contador lo delata.
+Attempted attacks are tracked and counted. If someone were to obtain an illicit `ALLOW/ok=True`, 
+the verdict of this check would be "BROKEN," and the counter would reveal it.
 
-Alcance y precondicion (leer antes de interpretar cualquier numero)
+Scope and Preconditions (read before interpreting any figures)
 ------------------------------------------------------------------
-Los campos del cuerpo que verificar() NO cruza contra el documento quedan
-cubiertos por la FIRMA. Por tanto, re-etiquetarlos exige poseer la clave
-privada de la autoridad: no es escalada de privilegio, es re-emision por
-la autoridad. Esta campana lo MIDE en los dos sentidos:
+Body fields that `verify()` does not cross-reference against the document are covered by the SIGNATURE. 
+Consequently, re-labeling them requires possession of the authority's private key; this is not a privilege escalation, 
+but rather a re-issuance by the authority itself. This check measures this in two ways:
 
-  - con la clave de la autoridad  -> el manifiesto re-etiquetado valida
-  - con otra clave (suplantacion) -> debe caer con FIRMA_INVALIDA
+  - Using the authority's key: the re-labeled manifest validates successfully.
+  - Using a different key (impersonation): it must fail with `INVALID_SIGNATURE`.
 
-Lo que esta campana NO audita: los llamadores reales de verificar() y con
-que version_minima invocan (el tope hacia adelante lo pone el llamador; aqui
-solo se mide que el control existe y funciona cuando se ejerce), la
-interaccion con credencial/AES/HKDF, y el arbol ZSQ, que verificar() reporta
-como evidencia y no incorpora a la decision.
+What this check does NOT audit: the actual callers of `verify()` or the `minimum_version` they specify 
+(the upper bound is determined by the caller; this check merely verifies that the control exists and functions when invoked),
+interactions involving credentials/AES/HKDF, and the ZSQ tree—which `verify()`
+reports as evidence but does not factor into the final decision.
 """
 
 from __future__ import annotations
