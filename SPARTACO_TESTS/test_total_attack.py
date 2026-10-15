@@ -1,40 +1,188 @@
-"""
-SPARTACO-SECURITY — Full-scale attack campaign with defensive attribution
-=======================================================================
-
-Objective
----------
-Execute the existing tests in the repository—without modifying the backend or creating new defense mechanisms—and 
-produce an "autopsy" that answers the following:
-
-    1) Which test was executed?
-    2) Which actual program components were exercised?
-    3) Which component can be identified as the primary defender (based on evidence from the test itself)?
-    4) How did the defense respond, according to the observable test outcome?
-    5) What was the final result?
-
-Fidelity Rules
---------------
-- No "invented" defenders: attribution is derived solely from the actual imports used in the test.
-- No modifications to production code.
-- No description of offensive procedures; no generation of new payloads.
-- Only tests already present in the repository are used.
-- A "PASS" result validates the specific property required by that test; it does not serve as a universal 
-guarantee that no vulnerabilities exist.
-- If the attribution is not clear-cut, it is reported as "INDETERMINATE."
-
-Outputs
--------
-    diagnostics/SPARTACO_ATAQUE_TOTAL_REPORT.json
-    diagnostics/SPARTACO_ATAQUE_TOTAL_REPORT.md
-
-Execution
----------
-    pytest -q tests/test_spartaco_ataque_total_atribucion.py -s
-
-The test suite launches `pytest` in sub-processes to run the other test files;
-this prevents recursion and ensures the campaign remains isolated.
-"""
+# ===========================================================================
+# SPARTACO-SECURITY — tests/test_spartaco_ataque_total_atribucion.py
+# ===========================================================================
+#
+# TOTAL ATTACK CAMPAIGN WITH DEFENSIVE ATTRIBUTION
+# ---------------------------------------------------------------------------
+#
+# OBJECTIVE
+# ---------------------------------------------------------------------------
+# Execute the tests already present in the repository — without modifying
+# the backend and without creating new defense mechanisms — and produce
+# an autopsy that answers, for every executed test:
+#
+#   1) Which test was executed?
+#   2) Which actual program components were exercised?
+#   3) Which component can be identified as the primary defender,
+#      based on evidence from the test itself?
+#   4) How did the defense respond, according to the observable test
+#      outcome?
+#   5) What was the final result?
+#
+# FIDELITY RULES
+# ---------------------------------------------------------------------------
+#   - No invented defenders: attribution is derived exclusively from the
+#     actual production imports declared by the test under analysis,
+#     extracted with AST, never executed.
+#   - No modification of production code.
+#   - No description of offensive procedures; no generation of new
+#     payloads.
+#   - Only tests already present in the repository are used.
+#   - A PASS validates the specific property required by that test; it
+#     does NOT serve as a universal guarantee that no vulnerabilities
+#     exist.
+#   - If attribution is not unequivocal, it is reported as
+#     INDETERMINATE, never forced into a convenient answer.
+#
+# WHAT THIS FILE IS
+# ---------------------------------------------------------------------------
+# A meta-test. It does not attack any module, it does not qualify an
+# instrument, it does not audit an isolated resource, it does not
+# verify a closure, and it does not prove a theorem. It measures the
+# coherence and the attributability of the entire adversarial suite
+# and produces a forensic report of that measurement.
+#
+# DISCOVERY
+# ---------------------------------------------------------------------------
+# The file iterates over tests/test_*.py, excluding itself to avoid
+# recursion, and filters the adversarial suites by nominal pattern:
+#
+#     adversarial, redteam, aniquilador, demolicion, montecarlo,
+#     cadena_grafo, killdog, centinela, probe_deeper,
+#     universal_closure, sello_clausura
+#
+# The classification is by convention, not by inference. No new tests
+# are created; no existing tests are reclassified.
+#
+# COMPONENT EXTRACTION
+# ---------------------------------------------------------------------------
+# Production imports are extracted via AST, without executing the file.
+# Only imports starting with core. or modules. count as evidence of a
+# production component. Paths are normalized to concrete components:
+#
+#     modules.spartaco_seguridad.proteccion  ->  SPARTACO_SEGURIDAD.PROTECCION
+#     core.centinela                          ->  CORE.CENTINELA
+#     modules.interfaz.paquetes.spartaco_ui   ->  INTERFAZ.SPARTACO_UI
+#
+# ATTRIBUTION
+# ---------------------------------------------------------------------------
+# Attribution is strict and conservative:
+#
+#   - One production component imported -> that component is the
+#     unequivocal primary defender. Evidence key:
+#     atribucion=import_unico_del_test.
+#   - More than one production component imported -> no hierarchy is
+#     invented. Primary defender is INDETERMINADO; every imported
+#     component is recorded as an observed secondary candidate.
+#     Evidence key: atribucion=varios_componentes_importados.
+#   - Zero production components imported -> INDETERMINADO. Evidence
+#     key: atribucion=sin_import_de_produccion_directo.
+#
+# This design avoids the classic failure mode of security reports:
+# attributing a defender by convenience when the evidence does not
+# support it.
+#
+# EXECUTION
+# ---------------------------------------------------------------------------
+# Each adversarial suite is executed in an isolated subprocess:
+#
+#     pytest -q <file> --junitxml=<tmp> --tb=short
+#
+# with cwd at the repository root and PYTHONPATH configured. Results
+# are parsed from the JUnit XML. States are PASS, FAIL, SKIP, ERROR.
+# If a subprocess produces no testcase in the XML, the failure is not
+# hidden: a synthetic case is recorded with state ERROR (nonzero return
+# code) or INDETERMINATE (zero return code with no cases), and the full
+# stdout is attached as failure detail.
+#
+# BASELINE
+# ---------------------------------------------------------------------------
+# After the adversarial suites have been executed individually, the
+# file runs every test in the repository in a single invocation with
+# --junitxml, using a temporary path outside the repo. This provides a
+# single, unambiguous reference point: the repository as a whole is
+# either green or not green.
+#
+# OBSERVED OUTCOME TRANSLATION
+# ---------------------------------------------------------------------------
+# The file translates test states to campaign vocabulary without
+# inferring internal mechanisms:
+#
+#     PASS            cumplió la condición exigida por la prueba
+#                     RESISTIO_LA_PRUEBA
+#     FAIL | ERROR    no cumplió la condición exigida por la prueba
+#                     REGRESION_O_BRECHA_POTENCIAL
+#     SKIP            no produjo veredicto ejecutado
+#                     INDETERMINADO
+#
+# No mechanism is deduced; only the observable result is recorded.
+#
+# STRUCTURAL COVERAGE
+# ---------------------------------------------------------------------------
+# Two sets are crossed:
+#   - Components observed by adversarial imports (union of all
+#     production imports across adversarial suites).
+#   - Components detected in the repository (all .py files under
+#     core/ and modules/, normalized to component names).
+#
+# The difference is reported as components with no direct adversarial
+# evidence in this campaign. The file does not require all components
+# to be covered; it reports the gap as a finding, not as a failure.
+#
+# PERSISTED ARTIFACTS
+# ---------------------------------------------------------------------------
+#   diagnostics/SPARTACO_ATAQUE_TOTAL_REPORT.json
+#   diagnostics/SPARTACO_ATAQUE_TOTAL_REPORT.md
+#
+# Both are written before any assertion. If the test fails, the report
+# is already on disk.
+#
+# FINAL ASSERTIONS
+# ---------------------------------------------------------------------------
+#   1) The campaign produced at least one adversarial case.
+#   2) Zero adversarial failures.
+#   3) Zero adversarial errors and the baseline total is green.
+#
+# No regression is disguised as campaign success. The campaign does
+# not "pass" if the system underneath is not green.
+#
+# WHAT THIS FILE IS NOT
+# ---------------------------------------------------------------------------
+#   - It is not an adversarial test: it does not attack any module.
+#   - It is not a metrological kernel: it does not qualify an
+#     instrument.
+#   - It is not an isolated-resource auditor.
+#   - It is not a closure test, a purity-of-construction theorem, or a
+#     monitor.
+#   - It does not certify the whole system: it certifies that the
+#     adversarial suite, executed together, is coherent, attributable
+#     and green.
+#
+# ROLE IN THE SUITE
+# ---------------------------------------------------------------------------
+# The adversarial battery attacks the layered architecture of
+# proteccion.py. The credential red-teams attack credencial.py. The
+# metrological kernel audits the instruments. The integration smoke
+# test checks the honest end-to-end path. The monitor correlates
+# external and internal observation. The fail-closed auditor qualifies
+# itself against synthetic controls. The seal closure test verifies
+# that declared algebra is physically operated. The universal closure
+# verifies that what is verified equals what is loaded equals what is
+# executed. The enablement theorem verifies purity of construction.
+# This file is the administrative closure of the suite: it verifies
+# that the entire set of tests, executed together, is coherent,
+# attributable by declaration, and green without exceptions disguised.
+#
+# PRINCIPLE
+# ---------------------------------------------------------------------------
+# A report that says "green" without saying who defended what is not a
+# security report; it is a status indicator. A report that invents a
+# defender by convenience is worse than no report. This file measures
+# the coherence and attributability of the entire adversarial suite
+# using only the tests that already exist and only the evidence that
+# the tests themselves declare.
+#
+# ===========================================================================
 
 from __future__ import annotations
 
