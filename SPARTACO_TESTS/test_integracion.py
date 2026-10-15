@@ -1,16 +1,92 @@
-"""
-============================================================================
-  test_integracion.py -- Test integral de los módulos que SÍ existen
-============================================================================
-  0) descubrimiento SC via barrer()/catalogo()
-  1) proteccion: generar claves + build + verificar
-  2) ml_proteccion: modelo dummy + manifestar + verificar
-  3) launcher: verificar_y_ejecutar el bootstrap.elf firmado
-
-No importa deteccion_intoxicacion: no existe en el árbol.
-No llama capacidades()/conceptos()/modulos(): __init__.py no las exporta.
-============================================================================
-"""
+# ============================================================================
+# VPSI-TRUTH — test_integracion.py
+# ============================================================================
+# Integration smoke test over the modules that actually exist in the
+# spartaco_seguridad package.
+#
+# POSTURE
+# -------
+# Unlike the adversarial suite, this file is cooperative: it exercises
+# the honest end-to-end path and confirms that the real modules fit
+# together. It still keeps two disciplines of the suite:
+#   1. It never couples to an imaginary surface: if a module is not in
+#      the tree, it is not imported; if a function is not exported, it
+#      is not called.
+#   2. It demands the correct failure node: the single mutation must
+#      fail specifically at "nucleo", not merely at "something".
+#
+# SCOPE
+# -----
+#   0) Discovery via SC.barrer() / SC.catalogo()
+#        - package is self-documented (recursos > 0, catalogo.n > 0)
+#        - resources PROTECCION, ML and LAUNCHER are present
+#
+#   1) proteccion.py — baseline cycle
+#        - generar_claves produces 32 B priv and 32 B pub
+#        - bootstrap.elf present and non-empty
+#        - build() seals and signs (n_neutro=3, version=1)
+#        - verificar() on the sealed artifact: ok=True, no fallos
+#        - verificar() on a one-bit mutation: ok=False AND
+#          "nucleo" appears in fallos (correct node, not any node)
+#
+#   2) ml_proteccion.py — real inventory weights
+#        - manifestar_modelo on a dummy model: ok=True and exactly
+#          n_pesos == 2 (config.json is not counted as a weight)
+#        - verificar_modelo on the intact model: ok=True, no fallos
+#        - verificar_modelo on a tampered shard: ok=False AND
+#          "nucleo" in fallos; original shard restored afterwards
+#
+#   3) launcher.py — verificar_y_ejecutar (SUBPROCESS mode)
+#        - sealed bootstrap: ok=True, ejecutado=True, exit_code=46,
+#          and "46" present in captured stdout (not just exit code)
+#        - tampered bootstrap (ELF header + zeros): ejecutado=False
+#          and ok=False; original restored from backup
+#
+# EXPLICIT NON-SCOPE
+# ------------------
+#   - deteccion_intoxicacion is not imported: it does not exist in the
+#     tree.
+#   - capacidades(), conceptos() and modulos() are not called: the
+#     package __init__ does not export them.
+#   - The launcher is exercised for ONE mutation only; exhaustive
+#     adversarial coverage of its surface belongs to the adversarial
+#     harness, not here.
+#
+# DESIGN NOTES
+# ------------
+#   - The discovery step ties the test to the real package contract
+#     via SC.barrer()/SC.catalogo(), not to a hardcoded module list.
+#   - ok=True is never accepted alone: the fallos list must also be
+#     empty in the success cases.
+#   - The single mutation is required to fail at the correct node
+#     ("nucleo"), which lets this file catch refactors that migrate
+#     the failure to a different barrier even when the public surface
+#     still returns ok=False.
+#   - Fixtures are restored after mutation so that no later test is
+#     poisoned by leftover state.
+#   - Exit code is 0 only when every check passed; otherwise 1.
+#
+# ROLE IN THE SUITE
+# -----------------
+#   test_credencial_aniquilador.py .......... monolithic attack
+#   test_credencial_redteam.py ................ 35 attacks
+#   test_credencial_redteam_continuacion.py ... 14 attacks
+#   test_D1_D7_... ............................ package as declaration
+#   test_d6_lector_calibracion.py ............. D6 reader calibration
+#   test_espartaco_cadena_grafo.py ............ topological map
+#   test_espartaco_multi_atacante_montecarlo.py  forensic Monte Carlo
+#   test_integracion.py ....................... honest end-to-end smoke
+#                                              over the modules that
+#                                              actually exist.
+#
+# PRINCIPLE
+# ---------
+#   An integration test that imports what is not there and calls what
+#   is not exported is worse than no test at all: it produces false
+#   confidence. This file walks only the real surface, demands the
+#   correct failure node for its one mutation, and restores every
+#   fixture it touches.
+# ============================================================================
 import json
 import shutil
 import sys
