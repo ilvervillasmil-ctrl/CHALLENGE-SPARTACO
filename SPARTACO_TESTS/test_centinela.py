@@ -1,12 +1,20 @@
-# =====================================================================
+# =========================================================================
+
 # SPARTACO-SECURITY — tests/test_centinela.py
-# =====================================================================
+
+# =========================================================================
+
 #
-# Supervisión de core.centinela.Centinela
-# Superficie pública del Engine: estado, registro, errores_arranque,
-# ejecutar_capacidad.
+
+# Supervision of core.centinela.Centinela
+
+# Public surface of the Engine: status, registration, start_errors,
+
+# execute_capacity.
+
 #
-# =====================================================================
+
+# =========================================================================
 
 from __future__ import annotations
 
