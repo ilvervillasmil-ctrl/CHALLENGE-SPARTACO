@@ -1,6 +1,6 @@
-"""Calibración adversarial: si el auditor deja pasar un mutante, falla este test.
-
-Mutantes en AST/datos sintéticos. No se escribe código de producción.
+"""Adversarial calibration: if the auditor lets a mutant slip through, 
+this test fails.
+Mutants in AST/synthetic data. No production code is written.
 """
 from __future__ import annotations
 import ast
