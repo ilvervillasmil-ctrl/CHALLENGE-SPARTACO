@@ -1,21 +1,157 @@
 # ===============================================================
-# TEST ESPARTACO — CADENA / GRAFO DE CONSISTENCIA
+# TEST ESPARTACO — CHAIN / CONSISTENCY GRAPH
 # tests/test_espartaco_cadena_grafo.py
 # ===============================================================
-# Atacantes CON clave pública, SIN clave privada.
-# Objetivo: mapear en qué NODO de la cadena se tranca el atacante
-# cuando muta bytes (ej. "53") y rompe dependencias verificables.
+# Attackers WITH public key, WITHOUT private key.
+# Goal: map at which NODE of the chain the attacker is stopped
+# when bytes are mutated (e.g. "53") and verifiable dependencies
+# are broken.
 #
-# Cadena conceptual:
-#   datos → nucleo → canales(S/Q) → n_bytes → cuerpo canónico → firma
-#                                      ↑
-#                               pub_bytes solo VERIFICA
-#                               (no firma de nuevo)
+# Conceptual chain:
+#   data → core → channels(S/Q) → n_bytes → canonical body → signature
+#                                    ↑
+#                            pub_bytes only VERIFIES
+#                            (does not sign again)
 #
-# No protege el SUT. Busca BREACH. Mide dónde queda atrapado.
-# proteccion.py intacto.
+# Does not protect the SUT. It looks for BREACH. It measures where
+# the attacker gets stuck.
+# proteccion.py untouched.
+#
+# THESIS
+# ------
+# An attacker who only holds the public key can mutate the artifact,
+# the manifest, or the signature, but cannot regenerate a valid
+# Ed25519 signature for a new content. Every mutation is expected to
+# be trapped at exactly one node of the dependency graph, determined
+# by the first broken edge. A single acceptance (ok=True for a
+# hostile input) is a BREACH and a critical failure.
+#
+# DEPENDENCY GRAPH
+# ----------------
+# Each node is an observable verification point.
+# Each edge A → B means: B depends on A; mutating A without
+# rebuilding B produces detectable inconsistency.
+#
+#   Nodes:
+#     datos, nucleo, canales_S, canales_Q, n_bytes,
+#     cuerpo, canónico, firma, manifiesto, aceptacion
+#
+#   Edges:
+#     datos → nucleo, canales_S, canales_Q, n_bytes
+#     nucleo, canales_S/Q, n_bytes → cuerpo
+#     cuerpo → canónico → firma → manifiesto → aceptacion
+#
+# STOPPING-NODE DETECTOR
+# ----------------------
+# nodo_detencion(resultado) returns
+#     (stopping_node, trajectory_per_node)
+# using only contract keys of the SUT (fallos, conceptos, pasos):
+#   - ok=True            -> aceptacion, all PASS.
+#   - fallos contains datos -> datos.
+#   - manifiesto step fails:
+#         FIRMA_INVÁLIDA                    -> firma
+#         MANIFIESTO_AUSENTE / CÓDIGO...    -> manifiesto
+#   - nucleo step fails  -> nucleo.
+#   - canales step fails -> canales.
+#   - n_bytes step fails -> n_bytes.
+# No text heuristics. No free-form parsing.
+#
+# ATTACKER MODEL
+# --------------
+# AtacanteCadena holds:
+#   pub_bytes, datos, manifiesto, firma, seed, rng, frente.
+# It explicitly does NOT hold any private material. tiene_solo_publica()
+# enforces this against a hardcoded blacklist of slot/attribute names
+# (private_key, priv, ruta_priv, Ed25519PrivateKey, seed_crypto) and
+# against any non-32-byte pub_bytes. The __init__ asserts it.
+#
+# Every attacker is deterministic:
+#   seed = sha256(master_seed|CADENA|attacker_id|frente)[:8]
+#   scenario_id = sha256(seed|attacker_id|frente|ops)[:24]
+# so any BREACH can be replayed exactly.
+#
+# ATTACK FRONTS (weighted)
+# ------------------------
+#   intercepta_byte       20   mutate one byte of datos
+#   intercepta_region     12   mutate a byte range of datos
+#   intercepta_longitud   10   append / truncate bytes
+#   intercepta_nucleo     10   force a fake core in the body
+#   intercepta_canal_S     8   force S
+#   intercepta_canal_Q     8   force Q
+#   intercepta_firma      12   random / truncated / flipped / zeroed sig
+#   intercepta_cuerpo     10   mutate a body field
+#   rearma_parcial        10   recompute core locally, no re-sign
+#
+# rearma_parcial is the strongest: the attacker repairs the
+# datos → nucleo edge but still cannot forge the signature. The
+# chain stops at firma, proving that core and signature cover
+# disjoint domains.
+#
+# INDIVIDUAL TESTS
+# ----------------
+#   test_00  provenance: SPEC_ID + SPEC_HASH, traceability anchor.
+#   test_01  legitimate full chain: ok=True, node=aceptacion.
+#   test_02  single-byte mutation of datos breaks nucleo; signature
+#            remains PASS because the body is untouched. Proves
+#            datos → nucleo is a real, not declarative, edge.
+#   test_03  attacker recomputes core after mutating data, writes it
+#            into the body, and still fails at firma
+#            (FIRMA_INVÁLIDA). Proves the canónico → firma edge is
+#            unbreakable without the private key.
+#   test_04  the attacker can verify but cannot sign: legitimate
+#            path still opens with the attacker's pub_bytes.
+#   test_99  Monte Carlo over N_ATACANTES (default 100000).
+#
+# MONTE CARLO (test_99)
+# ---------------------
+# For each attacker:
+#   - pick a front by weight.
+#   - build a deterministic attacker.
+#   - apply the mutation.
+#   - if the mutation is a no-op, skip (reported separately).
+#   - run P.verificar.
+#   - classify: BREACH / BLOCKED / INDETERMINATE / EXCEPTION.
+#   - if BLOCKED, record the stopping node and the (front, node) cell.
+#
+# Reported artifacts:
+#   - chain edges (declared graph).
+#   - stopping-node histogram.
+#   - matrix front × stopping_node (the causal map).
+#   - coverage per front.
+#   - causal reading: which front breaks which edge.
+#   - UPPER95 ≈ 3 / n_exec: statistical upper bound on BREACH rate
+#     at 95% confidence (rule of three). Honest claim, not a
+#     mathematical proof.
+#
+# Final hard asserts:
+#   - exceptions == 0
+#   - indeterminate == 0
+#   - breaches == 0                    <-- security invariant
+#   - n_exec > 0
+#   - stopping nodes include both nucleo and firma (graph is
+#     actually exercised, not a trivial edge)
+#   - the system still opens legitimately after the full run.
+#
+# RELATION TO THE REST OF THE SUITE
+# ---------------------------------
+#   test_credencial_aniquilador.py .......... attacks credencial.py
+#   test_credencial_redteam.py ............... 35 attacks
+#   test_credencial_redteam_continuacion.py .. 14 additional attacks
+#   test_D1_D7_... ........................... audits the package as
+#                                              a declaration
+#   test_d6_lector_calibracion.py ............ audits the D6 reader
+#   test_espartaco_cadena_grafo.py ........... topologically maps
+#                                              WHERE and WHY the
+#                                              SUT stops hostile
+#                                              mutations, at scale.
+#
+# PRINCIPLE
+# ---------
+#   With public key only, mutation is measurable, signature is not
+#   forgeable, and every broken edge has a name. The graph explains
+#   resistance; the Monte Carlo quantifies it; the final invariant
+#   proves that the system survives its own adversarial audit.
 # ===============================================================
-
 from __future__ import annotations
 
 import copy
