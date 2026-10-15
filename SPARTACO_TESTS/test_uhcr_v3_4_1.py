@@ -1,56 +1,177 @@
-# ===============================================================
-# UHCR v3.4.2-R2 — RAW causal boundary auditor
+# ===========================================================================
+# UHCR v3.4.2-R2 — RAW CAUSAL BOUNDARY AUDITOR
 # tests/test_uhcr_v3_4_2.py
-# ===============================================================
+# SPEC: spartaco.uhcr.v3.4.2
+# ===========================================================================
 #
-# TEOREMA UHCR
+# UHCR THEOREM
+# ---------------------------------------------------------------------------
+# Let E be an observable Engine. Let M_E be the set of providers E
+# declares applicable to evaluar_universal. Let H_i be the state of
+# facts E delivers to the invocation of provider B_i.
 #
-# Sea E un Engine observable. Sea M_E el conjunto de proveedores
-# que E declara aplicables a evaluar_universal. Sea H_i el estado
-# de hechos entregado por E a la invocacion de proveedor B_i.
+#     B_i = ENTER(E, m_i, evaluar_universal, H_i)
 #
-#   B_i = ENTER(E, m_i, evaluar_universal, H_i)
+# A return of B_i is asserted only if the following is observed:
 #
-# Solo se afirma retorno de B_i si se observa:
+#     EXIT(B_i, R_i)
 #
-#   EXIT(B_i, R_i)
+# If R_i contains published facts P_i, UHCR observes P_i as provider
+# output. It does NOT identify P_i with H_{i+1}.
 #
-# Si R_i contiene hechos publicados P_i, UHCR observa P_i como
-# salida del proveedor. NO identifica P_i con H_{i+1}.
+# The transition:
 #
-# La transicion:
+#     (H_i, P_i) --Absorb_E--> H_{i+1}
 #
-#   (H_i, P_i) --Absorb_E--> H_{i+1}
+# is asserted as Engine semantics only when sufficient native evidence
+# exists, or when its observable consequences can be RAW-contrasted
+# against H_{i+1}. In the absence of that evidence it is labelled
+# NO_DETERMINADO.
 #
-# solo se afirma como semantica del Engine cuando existe evidencia
-# nativa suficiente o cuando sus consecuencias observables pueden
-# contrastarse RAW contra H_{i+1}. En ausencia de dicha evidencia
-# se etiqueta como NO_DETERMINADO.
+# For a "first write wins" absorption, if that semantics is documented
+# or natively observed:
 #
-# Para una absorcion "first write wins", si esa semantica esta
-# documentada/observada nativamente:
+#     h in H_i                         => H_{i+1}[h] = H_i[h]
+#     h in P_i and h not in H_i        => H_{i+1}[h] = P_i[h]
+#     h in P_i ∩ H_i, P_i[h] != H_i[h] => H_{i+1}[h] = H_i[h]
 #
-#   h in H_i                         => H_{i+1}[h] = H_i[h]
-#   h in P_i and h not in H_i       => H_{i+1}[h] = P_i[h]
-#   h in P_i∩H_i and P_i[h]!=H_i[h] => H_{i+1}[h] = H_i[h]
+# EPISTEMIC RESTRICTIONS
+# ---------------------------------------------------------------------------
+#   EXIT not observed in P_obs =/=> EXIT impossible
+#   TIMEOUT =/=> vulnerability
+#   EU -> ET -> EU =/=> defect
+#   Delta Phi_K(H) = 0 =/=> Delta H = 0
+#   CALL observed without RETURN observed =/=> active frame
+#   E_derived does not replace E_RAW
+#   E_instrumental does not replace E_native when it exists
 #
-# Restricciones epistemicas:
+# EVIDENCE POLICIES (MACHINE-READABLE)
+# ---------------------------------------------------------------------------
+#   RAW_EVIDENCE_POLICY          FULL_WHEN_JSON_SERIALIZABLE
+#   NON_SERIALIZABLE_POLICY      TYPED_REPR_TRUNCATED_2000
+#   RECONCILIATION_MODE          ORDER_PRESERVING_BY_PROVIDER
 #
-#   EXIT no observado en P_obs =/=> EXIT imposible
-#   TIMEOUT =/=> vulnerabilidad
-#   EU->ET->EU =/=> defecto
-#   Delta Phi_K(H)=0 =/=> Delta H=0
-#   CALL observado sin RETURN observado =/=> frame activo
-#   E_derivada no sustituye E_RAW
-#   E_instrumental no sustituye E_nativa cuando esta existe
+# WHAT STATUS MEANS
+# ---------------------------------------------------------------------------
+# The status of the test expresses ONLY the consistency of the auditor.
+# It never expresses security, termination or global correctness of the
+# system. security_verdict is NOT_EVALUATED by doctrine.
 #
-# RAW_EVIDENCE_POLICY=FULL_WHEN_JSON_SERIALIZABLE
-# NON_SERIALIZABLE_POLICY=TYPED_REPR_TRUNCATED_2000
-# RECONCILIATION_MODE=ORDER_PRESERVING_BY_PROVIDER
+# ARCHITECTURE
+# ---------------------------------------------------------------------------
+# The worker runs Engine in a spawn subprocess and wraps
+# engine.ejecutar_capacidad to intercept only evaluar_universal. For
+# each interception it records a boundary B_i with state ENTER, the
+# projected H_before (RAW and Phi_K), and installs a profiler that
+# captures calls and returns to the observed internal capabilities
+# (evaluar_universal, ejecutar_total) under modules/. On return, the
+# boundary becomes EXIT with R_RAW and P_RAW projected from
+# resultado.hechos if present; on exception it becomes RAISE with the
+# exception evidence.
 #
-# STATUS del test solo expresa consistencia del AUDITOR.
-# Nunca expresa seguridad, terminacion o correccion global del sistema.
-# ===============================================================
+# PHI_K PROJECTION
+# ---------------------------------------------------------------------------
+# Phi_K(H) is a hash over the sorted keys of H, not its values. It
+# detects appearance or disappearance of fields but not changes in
+# existing values. This is why Delta Phi_K(H) = 0 does NOT imply
+# Delta H = 0. Phi_K is a bounded projection, not a substitute for RAW.
+#
+# GI GROUPING (PER BOUNDARY)
+# ---------------------------------------------------------------------------
+# Each observed call or return is associated with the currently open
+# boundary. Metrics per boundary are calls_observed, returns_observed,
+# unmatched_calls_observed, depth_max_observed, pair counts and
+# mismatch count. The name "unmatched_calls_observed" is deliberate:
+# it does not assert active frames, only that more calls than returns
+# were observed within the observation window.
+#
+# RAW TRANSITION CHECKS
+# ---------------------------------------------------------------------------
+# For each consecutive pair (A, B) of boundaries, _raw_transition
+# contrasts the RAW consequences without asserting that Absorb_E is
+# the sole cause. Three rules are checked:
+#
+#   conserved_preexisting    H_i[h] must equal H_{i+1}[h]
+#   new_publications         P_i[h] must appear in H_{i+1} if h not in H_i
+#   candidate_conflicts      if h in P_i ∩ H_i and values differ, the
+#                            first-write rule must preserve H_i[h]
+#
+# Violations are named:
+#   PREEXISTING_VALUE_NOT_CONSERVED
+#   NEW_PUBLICATION_NOT_PROPAGATED
+#   FIRST_WRITE_NOT_PRESERVED
+#
+# Status is OBSERVED_CONSISTENT, OBSERVED_CONTRADICTION or
+# NO_DETERMINADO. The last case triggers when any of H_i, P_i, H_{i+1}
+# is not a JSON-RAW dict. Every check carries the note
+# "causalidad exclusiva de Absorb_E: NO AFIRMADA".
+#
+# NATIVE RECONCILIATION
+# ---------------------------------------------------------------------------
+# The native result, if it has operacion == "evaluar_universal", is
+# projected to a structured view including traza. Trace events with
+# fase APORTE or FALLO are matched in order against observed EXIT
+# boundaries grouped by module. Native events without an observed
+# boundary are recorded as native_without_exit; observed boundaries
+# without a native event are recorded as exit_without_native. Status
+# is OK if both sets are empty, CONTRADICTION otherwise.
+#
+# VERDICTS (SEPARATE, NONE COVERS ANOTHER)
+# ---------------------------------------------------------------------------
+#   AUDITOR_INTEGRITY      PASS unless WORKER_ERROR or stack mismatch
+#   PROTOCOL_CONSISTENCY   PASS if reconciliation is OK;
+#                          FAIL if reconciliation is CONTRADICTION;
+#                          NO_DETERMINADO on timeout or missing native
+#   SYSTEM_SEMANTIC_STATUS NO_DETERMINADO on timeout or missing native;
+#                          else equal to PROTOCOL_CONSISTENCY
+#   SECURITY_VERDICT       NOT_EVALUATED (always, by doctrine)
+#   UHCR_TEST_STATUS       FAIL if auditor FAIL or protocol FAIL;
+#                          PASS otherwise
+#
+# PERSISTED ARTIFACTS
+# ---------------------------------------------------------------------------
+#   diagnostics/uhcr_v3_4_2/PRECONDITIONS.json
+#   diagnostics/uhcr_v3_4_2/G_E.json
+#   diagnostics/uhcr_v3_4_2/G_I.json
+#   diagnostics/uhcr_v3_4_2/GI_EVENTS.json
+#   diagnostics/uhcr_v3_4_2/ENGINE_NATIVE.json
+#   diagnostics/uhcr_v3_4_2/EVIDENCE.json
+#   diagnostics/uhcr_v3_4_2/REPORT.txt
+#
+# ROLE IN THE SUITE
+# ---------------------------------------------------------------------------
+# The adversarial battery attacks the layered architecture of
+# proteccion.py. The credential red-teams attack credencial.py. The
+# metrological kernel audits instruments. The integration smoke test
+# checks the honest path. The monitor correlates external and internal
+# observation. The fail-closed auditor qualifies itself against
+# synthetic controls. The seal closure test verifies declared algebra
+# is physically operated. The universal closure verifies verified ==
+# loaded == executed. The enablement theorem verifies purity of
+# construction. The total attack campaign measures coherence of the
+# suite. The microscope calibration measures the perturbation of the
+# observation act. The dynamic fail-closed surface auditor implements
+# the complete metrological doctrine over the system surface. The
+# transition auditor asks what observable state changes between
+# transitions and which claims about state are admissible. This file
+# goes one step further: it audits the causal boundary between Engine
+# and provider, and it explicitly refuses to infer the absorption
+# semantics from observable consequences alone.
+#
+# PRINCIPLE
+# ---------------------------------------------------------------------------
+# Observing that P_i and H_{i+1} are consistent under a first-write-
+# wins rule is not observing that the Engine implemented first-write-
+# wins. Observing that no RETURN appeared within the observation
+# window is not observing that the frame is active. Observing that
+# Phi_K(H) did not change is not observing that H did not change. The
+# auditor contrasts what the evidence permits and marks everything
+# else as NO_DETERMINADO. A claim about state is admissible only when
+# the evidence preserves the information the claim requires. Where it
+# does not, the claim is not refuted and not confirmed: it is left for
+# a future observation policy that preserves the invariant.
+#
+# ===========================================================================
 
 from __future__ import annotations
 
