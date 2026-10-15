@@ -1,65 +1,203 @@
-"""
-UHCR — AUDITOR NEUTRAL DE TRANSICIONES EU <-> ET + ESTADO
-==================================================
-
-PREGUNTA EXPERIMENTAL
----------------------
-El auditor topológico anterior respondió qué forma tiene la ejecución.
-Este auditor pregunta:
-
-    ¿qué estado observable cambia entre una invocación EU/ET y la siguiente?
-
-TEOREMA DE OBSERVABILIDAD DE ESTADO
------------------------------------
-Para dos CALL observados consecutivos C_i y C_j de una misma función:
-
-    S_i = Proj(entrada_i, hechos_i, estructura_i)
-    S_j = Proj(entrada_j, hechos_j, estructura_j)
-
-el auditor puede derivar:
-
-    DeltaS(i,j) = Diff(S_i, S_j)
-
-pero:
-
-    DeltaS = 0  =/=> ausencia de progreso semántico
-    DeltaS != 0 =/=> progreso correcto
-    repetición  =/=> defecto
-    timeout     =/=> fallo
-
-La proyección S es explícita y limitada. No se serializa indiscriminadamente
-todo Engine.__dict__ ni todo objeto alcanzable.
-
-RAW:
-    valores JSON-serializables se conservan exactos.
-
-REPRESENTATION_TRANSFORM:
-    valores no JSON se representan de forma tipada y truncada.
-
-DERIVED:
-    fingerprints, deltas, grupos de estados y secuencias son derivados.
-
-TEOREMA DE ADMISIBILIDAD DE EVIDENCIA
-------------------------------------
-Sea S el sistema, O el mecanismo de observación, M una afirmación derivada
-y Q una conclusión sobre S. El auditor sólo puede usar M para juzgar S si
-la propia evidencia demuestra que O preserva las propiedades necesarias
-para M:
-
-    Judge(S,Q) => Qualified(O,M) and Valid(M=>Q)
-
-Si la política de observación no preserva el invariante, el estado de esa
-afirmación es:
-
-    INSTRUMENT_NOT_QUALIFIED
-
-En particular, HEAD+TAIL no preserva emparejamiento CALL/RETURN ni permite
-inferir un máximo global de profundidad a partir de max_depth_materialized.
-
-PASS:
-    significa únicamente integridad del auditor y de su clasificador de
-    admisibilidad; no seguridad del sistema.
-"""
+# ===========================================================================
+# UHCR — NEUTRAL AUDITOR OF EU <-> ET TRANSITIONS + STATE
+# tests/test_uhcr_transiciones_neutrales.py
+# SPEC: UHCR-TRANSITIONS-1.6-PATH-QUALIFIED
+# ===========================================================================
+#
+# EXPERIMENTAL QUESTION
+# ---------------------------------------------------------------------------
+# The topological auditor answered: what shape does the execution have?
+# This auditor asks: what observable state changes between one EU/ET
+# invocation and the next?
+#
+# STATE OBSERVABILITY THEOREM
+# ---------------------------------------------------------------------------
+# For two consecutive CALL observations C_i and C_j of the same function:
+#
+#     S_i = Proj(input_i, facts_i, structure_i)
+#     S_j = Proj(input_j, facts_j, structure_j)
+#
+# the auditor can derive:
+#
+#     DeltaS(i, j) = Diff(S_i, S_j)
+#
+# but:
+#
+#     DeltaS = 0   =/=> absence of semantic progress
+#     DeltaS != 0  =/=> correct progress
+#     repetition   =/=> defect
+#     timeout      =/=> failure
+#
+# The projection S is explicit and bounded. It does not indiscriminately
+# serialize the whole Engine.__dict__ nor the whole reachable graph.
+#
+# Three evidence roles:
+#   RAW                     JSON-serializable values preserved exactly
+#   REPRESENTATION_TRANSFORM non-JSON values represented typed and truncated
+#   DERIVED                  fingerprints, deltas, groups, sequences
+#
+# EVIDENCE ADMISSIBILITY THEOREM
+# ---------------------------------------------------------------------------
+# Let S be the system, O the observation mechanism, M a derived claim,
+# and Q a conclusion about S. The auditor may only use M to judge S if
+# the evidence itself demonstrates that O preserves the properties
+# required for M:
+#
+#     Judge(S, Q) => Qualified(O, M) and Valid(M => Q)
+#
+# If the observation policy does not preserve the invariant, the state
+# of that claim is INSTRUMENT_NOT_QUALIFIED.
+#
+# In particular: HEAD+TAIL does not preserve CALL/RETURN pairing and
+# does not allow inferring a global maximum depth from
+# max_depth_materialized.
+#
+# WHAT PASS MEANS HERE
+# ---------------------------------------------------------------------------
+# PASS means only that the auditor and its admissibility classifier are
+# intact. It is NOT a claim about the safety of the system.
+#
+# ARCHITECTURE
+# ---------------------------------------------------------------------------
+# The auditor runs the Engine in a subprocess with spawn context. It
+# wraps eng.ejecutar_capacidad to emit path signals (DISPATCH_ENTER,
+# DISPATCH_RETURN, PROVIDER_ENTER, PROVIDER_RETURN) and installs both
+# sys.setprofile and sys.settrace to capture:
+#
+#     CALL             function entry with projected state
+#     PROFILE_RETURN   function exit with raw result
+#     INTERNAL_STATE   line-level state snapshots (bounded per frame)
+#     MISMATCH         RETURN without CALL, or non-LIFO RETURN
+#
+# The projection captures: arguments via inspect.getargvalues, facts if
+# present under recognized names, local key names without values, small
+# scalars, and a shallow structural projection of self (type, dict keys,
+# scalar or collection sizes at first level).
+#
+# STATE PROJECTION IS DELIBERATELY BOUNDED
+# ---------------------------------------------------------------------------
+# Observing everything would be blind by excess. The projection observes
+# shape and scale, not the recursive graph. This is a stated design
+# decision, not a limitation to be fixed.
+#
+# PATH OBSERVABILITY (ENGINE -> DISPATCH -> PROVIDER)
+# ---------------------------------------------------------------------------
+# The dispatcher wrapper records each control-capacity dispatch with
+# dispatch_id, module, capability and provider_seen. When the profiler
+# observes a call whose code matches the dispatched capability's module
+# and function, it marks the dispatch as having a provider and emits
+# PROVIDER_ENTER. The chain requires exact module+function match, not
+# merely that any provider is in flight.
+#
+#     PATH_OBSERVED              exact_dispatch_provider_chains > 0
+#     PATH_PARTIALLY_OBSERVED    some signal observed but not the full chain
+#     INCONCLUSIVE               no path signal observed
+#
+# Critical path signals travel by immediate queue, not by HEAD+TAIL.
+# The auditor explicitly recognizes that relying on the checkpoint for
+# these signals would lose the information needed to decide path_status.
+#
+# OBSERVATION COMPLETENESS
+# ---------------------------------------------------------------------------
+#     COMPLETE_UNTIL_PROCESS_RESULT        child terminated before deadline
+#     HEAD_PLUS_TAIL_OF_LAST_CHECKPOINT    deadline expired, last checkpoint used
+#
+# This distinction is what allows the meta-auditor to decide whether it
+# can qualify claims about CALL/RETURN balance. Without it, the auditor
+# could not know whether it is seeing everything that happened or only
+# a sample.
+#
+# META-AUDITOR (EVIDENCE ADMISSIBILITY)
+# ---------------------------------------------------------------------------
+# At the end of the capture, a meta-auditor decides which claims the
+# observation policy of THIS run admits:
+#
+#     MATERIALIZED_CALL_RETURN_BALANCE
+#         requires PAIR_PRESERVING_EVENT_SET
+#         qualified only if observation was complete
+#     GLOBAL_MAX_DEPTH_FROM_MATERIALIZED
+#         requires NO_OMITTED_EVENTS_IN_OBSERVATION_INTERVAL
+#         qualified only if observation was complete
+#     MATERIALIZED_VALUES_DESCRIBE_MATERIALIZED_SAMPLE
+#         requires DERIVATION_RECOMPUTABLE_FROM_PERSISTED_EVENTS
+#         always qualified: counters are recomputed from the sample
+#     TIMEOUT_IS_FINITE_WINDOW_CENSORING
+#         requires EXPLICIT_DEADLINE_AND_TERMINATION_BY_OBSERVER
+#         always qualified: timeout is generated by the observer
+#
+# The meta-auditor does not judge the system. It judges whether the
+# instrument preserves the information needed for each specific
+# inference. This is the same doctrine the UHCR auditor developed for
+# instrument qualification, applied here to the specific claims the
+# auditor might want to emit about state.
+#
+# DERIVED METRICS (DESCRIBE, DO NOT JUDGE)
+# ---------------------------------------------------------------------------
+#   per_function            calls materialized, consecutive pairs, same
+#                           fingerprint pairs, different fingerprint
+#                           pairs, unique state fingerprints
+#   same_function_transitions   consecutive calls of the same function
+#                           with their diff
+#   parent_child_transitions    parent state to child state diff
+#   topology_metrics        depth increments, plus-one ratio, edge counts
+#   quantitative_metrics    observed span, calls per second, repeat
+#                           ratio, facts-zero ratio
+#   internal_state_metrics  snapshots materialized, frames with internal
+#                           state, unique internal fingerprints, pre-child
+#                           states reconstructed
+#   path_metrics            dispatch enter/return, provider enter/return,
+#                           exact chains, path_status
+#
+# PERSISTED ARTIFACTS
+# ---------------------------------------------------------------------------
+#   diagnostics/uhcr_transiciones_neutrales/PRECONDITIONS.json
+#   diagnostics/uhcr_transiciones_neutrales/STATE_EVENTS.json
+#   diagnostics/uhcr_transiciones_neutrales/STATE_MAP.json
+#   diagnostics/uhcr_transiciones_neutrales/METRICS.json
+#   diagnostics/uhcr_transiciones_neutrales/EVIDENCE.json
+#   diagnostics/uhcr_transiciones_neutrales/REPORT.txt
+#   diagnostics/test_evidence.json
+#
+# REPORT READING RULES
+# ---------------------------------------------------------------------------
+#   same_fingerprint=True describes equality of THIS observable
+#       projection, not of the complete state.
+#   Observable delta zero does not prove absence of semantic progress.
+#   Observable delta different does not prove correctness.
+#   TIMEOUT is experimental censoring, not failure.
+#   AUDITOR_INTEGRITY=PASS
+#   SYSTEM_SEMANTIC_STATUS=NO_DETERMINADO
+#   SECURITY_VERDICT=NOT_EVALUATED
+#
+# ROLE IN THE SUITE
+# ---------------------------------------------------------------------------
+# The adversarial battery attacks the layered architecture of
+# proteccion.py. The credential red-teams attack credencial.py. The
+# metrological kernel audits instruments. The integration smoke test
+# checks the honest path. The monitor correlates external and internal
+# observation. The fail-closed auditor qualifies itself against
+# synthetic controls. The seal closure test verifies declared algebra
+# is physically operated. The universal closure verifies verified ==
+# loaded == executed. The enablement theorem verifies purity of
+# construction. The total attack campaign measures coherence of the
+# suite. The microscope calibration measures the perturbation of the
+# observation act. The dynamic fail-closed surface auditor implements
+# the complete metrological doctrine over the system surface. This
+# file asks a different question: what observable state changes
+# between transitions, and which claims about that state are
+# admissible given the observation policy of this run.
+#
+# PRINCIPLE
+# ---------------------------------------------------------------------------
+# Observing state is not judging progress. Observing a delta is not
+# judging correctness. Observing a timeout is not judging failure. A
+# claim about state is admissible only if the observation policy of
+# this run preserves the information that claim requires. When it does
+# not, the claim is not refuted and not confirmed: it is
+# INSTRUMENT_NOT_QUALIFIED, published with the exact reason, and left
+# for a future observation policy that preserves the invariant.
+#
+# ===========================================================================
 
 from __future__ import annotations
 
