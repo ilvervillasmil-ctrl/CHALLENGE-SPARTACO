@@ -1,53 +1,157 @@
 # =============================================================================
-#  UHCR — AUDITORÍA FAIL-CLOSED DE UN RECURSO AISLADO  (ARCHIVO ÚNICO)
+#  UHCR — ISOLATED RESOURCE FAIL-CLOSED AUDITOR (SINGLE FILE)
+#  SPEC: UHCR-RESOURCE-1.4
 # =============================================================================
 #
-#  CÓMO SE USA
-#  -----------
-#  Este archivo es TODO: motor + pruebas. No depende de ningún otro .py.
-#  Para auditar otro recurso:
-#     1. Copia este archivo como   tests/test_<recurso>_failclosed.py
-#     2. Cambia SOLO la línea TARGET (sección 1, justo debajo).
-#  Nada más se toca. La identidad de cada copia queda en tres hashes:
-#   * AUDITOR_SHA256          = H(archivo exacto ejecutado, incluida TARGET)
-#   * AUDITOR_TEMPLATE_SHA256 = H(archivo completo − línea TARGET)
-#       → igual en todas las copias ⇔ las copias son byte a byte idénticas
-#         salvo TARGET (no se acomodó nada tras ver cada recurso).
-#   * AUDITOR_ENGINE_SHA256   = H(sección M exclusivamente: el motor)
-#       → igual en todas las copias ⇔ mismo motor.
-#  Si la línea TARGET no es única o faltan los marcadores de la sección M,
-#  el hash correspondiente es None y el auditor queda NO calificado.
+# HOW TO USE
+# -----------------------------------------------------------------------------
+#  This file is EVERYTHING: motor + tests. It depends on no other .py.
+#  To audit another resource:
+#     1. Copy this file as   tests/test_<resource>_failclosed.py
+#     2. Change ONLY the TARGET line (section 1, just below).
+#  Nothing else is touched. The identity of each copy lives in three hashes:
+#   * AUDITOR_SHA256          = H(exact executed file, TARGET line included)
+#   * AUDITOR_TEMPLATE_SHA256 = H(full file minus the TARGET line)
+#       -> identical across copies iff copies are byte-for-byte identical
+#          except for TARGET (nothing was fitted after seeing each resource).
+#   * AUDITOR_ENGINE_SHA256   = H(section M only: the motor)
+#       -> identical across copies iff the motor is the same.
+#  If the TARGET line is not unique or the section-M markers are missing,
+#  the corresponding hash is None and the auditor is NOT qualified.
 #
-#  REGLAS
-#  ------
-#   * REPORT = f(EVIDENCE): todo se deriva del expediente de esta corrida.
-#   * Sin nombres de producción, sin números mágicos, sin roles esperados
-#     escritos a mano: lo que haya que comparar se descubre del propio TARGET.
-#   * AUDIT_SCOPE=ISOLATED_RESOURCE y SYSTEM_WIDE_CLAIM=NO: se mide el
-#     componente por sí solo; no es una afirmación sobre el sistema completo.
-#   * Veredicto por propiedad (familias descubiertas por el motor); nunca un
-#     PASS único mezclado. Ningún PASS sin falsificación ejecutada.
-#   * La evidencia se PERSISTE antes de cualquier aserción
-#     (JSON + index.jsonl en diagnostics/uhcr_resources/<recurso>/).
-#   * INSTRUMENTO (AUDITOR_QUALIFICATION) separado del RECURSO
-#     (TARGET_SECURITY_RESULT): un contraejemplo del recurso no descalifica
-#     al auditor.
+# RULES
+# -----------------------------------------------------------------------------
+#   * REPORT = f(EVIDENCE): everything derives from this run's expediente.
+#   * No production names, no magic numbers, no expected roles written by
+#     hand: whatever must be compared is discovered from the TARGET itself.
+#   * AUDIT_SCOPE=ISOLATED_RESOURCE and SYSTEM_WIDE_CLAIM=NO: the component
+#     is measured on its own; this is not a claim about the whole system.
+#   * Verdict per property (families discovered by the motor); never a
+#     single mixed PASS. No PASS without executed falsification.
+#   * Evidence is PERSISTED before any assertion (JSON + index.jsonl under
+#     diagnostics/uhcr_resources/<resource>/).
+#   * INSTRUMENT (AUDITOR_QUALIFICATION) is separated from RESOURCE
+#     (TARGET_SECURITY_RESULT): a resource counterexample never
+#     disqualifies the auditor.
 #
-#  ESTRUCTURA DEL ARCHIVO
-#  ----------------------
-#   1. Recurso a auditar (TARGET)                 ← única línea que cambia
-#   M. MOTOR (descubrimiento AST, roles, falsificación, contabilidad,
-#      registro persistente, informe, autopruebas del motor)
-#   2. Llamada al motor (una sola auditoría + registro persistido)
-#   3. Resolución del recurso
-#   4. Informe y estructura del expediente
-#   5. Veredicto por propiedad (auditor vs recurso)
-#   6. Descripción ≠ aplicabilidad ≠ medición ≠ veredicto
-#   7. Equivalencia wrapper ↔ motor
-#   8. Anti-hardcode del motor
-#   9. Registro de auditoría, identidad de corrida, identidad plantilla/motor y contabilidad
-#   E. Ejecución directa (python3 este_archivo.py [ruta/target.py])
+# FILE STRUCTURE
+# -----------------------------------------------------------------------------
+#   1. Resource to audit (TARGET)                <- the only line that changes
+#   M. MOTOR (AST discovery, roles, falsification, accounting, persistent
+#      record, report, motor self-tests)
+#   2. Call into the motor (single audit + persisted record)
+#   3. Resource resolution
+#   4. Report and expediente structure
+#   5. Per-property verdict (auditor vs resource)
+#   6. Description != applicability != measurement != verdict
+#   7. Wrapper <-> motor equivalence
+#   8. Anti-hardcode of the motor
+#   9. Audit record, run identity, template/motor identity, accounting
+#   E. Direct execution (python3 this_file.py [path/target.py])
+#
 # =============================================================================
+#
+# MOTOR — STATIC + SELECTIVE DYNAMIC FAIL-CLOSED AUDIT
+# -----------------------------------------------------------------------------
+#
+# The motor. Wrappers (test_<resource>_failclosed.py) only set TARGET and,
+# for calibration resources, assert expectations.
+#
+# Pipeline
+#     Target -> AST -> SEGURIDAD -> SemanticInventory -> Properties
+#            -> (only if applicable) PositiveWitness -> Falsifications
+#            -> Oracle -> Verdict
+#
+# 1.4 — FOUR SEPARATE STAGES (semantic description != property applicability
+# != measurement != verdict):
+#   (a) DESCRIPTION: role/asset/declared semantics are explanatory metadata
+#       and traceability only; they feed no applicability, campaign or verdict.
+#   (b)+(c) MEASUREMENT/APPLICABILITY: EVERY capability receives a campaign
+#       attempt per measured property (FAIL_CLOSED, INTEGRITY), selected by the
+#       runtime signature shape only. Applicability is ESTABLISHED by a valid
+#       positive witness (protected effect observed) plus at least one
+#       falsifiable condition actually executed. No valid positive control ->
+#       NOT_QUALIFIED.
+#   (d) VERDICT from measurement only (see pass_fail_closed()).
+#
+# ANTI-HARDCODE CONTRACT
+# -----------------------------------------------------------------------------
+# This file MUST NOT name production symbols of any audited resource. All
+# derivation rules are universal structural features (enum members ALLOW/DENY,
+# a `decision` field, parameter-shape contracts, return-annotation links...).
+# Calibration expectations live exclusively in the wrappers.
+#
+# MEASUREMENT ISOLATION
+# -----------------------------------------------------------------------------
+# SYSTEM_PERIMETER_BYPASSED_FOR_MEASUREMENT=YES means the auditor loads the
+# target file in isolation (direct file import with ROOT on sys.path) so the
+# resource can be measured without traversing the system perimeter. It is a
+# statement about the MEASUREMENT set-up only; it is not a claim that any
+# production perimeter was disabled, and results carry SYSTEM_WIDE_CLAIM=NO.
+#
+# AUDIT RECORD, ACCOUNTING AND AUDITOR/TARGET SEPARATION
+# -----------------------------------------------------------------------------
+# Every audit_resource() call returns exp['audit_record'] (identity of this
+# run: TARGET_SHA256, AUDITOR_SHA256, SPEC, RUN_ID, UTC_TIMESTAMP,
+# RUN_IDENTITY) and exp['accounting'] (zero-loss invariants). persist_record()
+# writes the whole expediente as JSON (never overwriting) plus an index line.
+#
+# ACCOUNTING DEFINITIONS (all derived from the case/campaign structures):
+#   * capabilities_discovered = names read from the SEGURIDAD declaration list.
+#     classified  = capability record whose role != UNKNOWN AND confidence
+#                   != NOT_RESOLVED (ORCHESTRATOR is a resolved role).
+#     unresolved  = capability record whose role == UNKNOWN OR confidence
+#                   == NOT_RESOLVED.
+#     unaccounted = declared names without a record + records not declared.
+#   * cases_generated = entries of every probe PLAN (block['plan']), written
+#     by the probe BEFORE it runs anything. executed = PLAN entries matched by
+#     a record in block['cases']; not_executed_accounted = PLAN entries
+#     matched by a record in block['not_executed'] (each with a reason).
+#     unaccounted = PLAN entries matched by neither + records that were never
+#     planned. Witness-search calls are stimulus construction, not cases
+#     (their exceptions are still listed, origin TARGET_OBSERVED_IN_SEARCH).
+#   * properties_applicable = verdict families != NOT_APPLICABLE.
+#     qualified = PASS/FAIL backed by executed evidence in property_evidence;
+#     not_qualified = NOT_QUALIFIED/INSUFFICIENT_EVIDENCE; unaccounted = rest.
+#   * exceptions: every exception raised by target code inside a tagged probe
+#     call is logged by _call() in a run-scoped recorder independent of the
+#     case records; both views must reconcile (unreconciled == 0).
+#
+# AUDITOR_QUALIFICATION (the instrument) is separated from
+# TARGET_SECURITY_RESULT (the resource): a target counterexample is an
+# observation and never disqualifies the auditor.
+#
+# SYMMETRIC CALIBRATION
+# -----------------------------------------------------------------------------
+# A real audit is qualified only when the instrument itself passes a
+# two-sided control: a synthetic FAIL_OPEN gate must be diagnosed FAIL, and a
+# synthetic CLOSED gate must be diagnosed PASS, both with clean accounting.
+# Neither direction alone is accepted. This is why
+# AUDITOR_QUALIFICATION=FAIL is possible even when the TARGET looks fine, and
+# why a TARGET counterexample yields TARGET_SECURITY_RESULT=FAIL while
+# AUDITOR_QUALIFICATION=PASS.
+#
+# ROLE IN THE SUITE
+# -----------------------------------------------------------------------------
+# The adversarial files test whether the system resists hostile input. The
+# metrological kernel tests whether the instruments that measure that
+# resistance are themselves trustworthy. The integration smoke test checks
+# that the honest end-to-end path works. This file is the resource-scoped
+# auditor: it builds the instrument, qualifies it against known synthetic
+# controls, and only then measures a single production resource in isolation,
+# publishing evidence before any assertion and separating the instrument's
+# qualification from the resource's verdict.
+#
+# PRINCIPLE
+# -----------------------------------------------------------------------------
+# A single-file auditor whose identity, qualification and evidence are
+# measured, not declared. If the instrument cannot distinguish a deliberately
+# open control from a deliberately closed one, the audit is withheld. If the
+# resource produces a counterexample, the resource fails and the instrument
+# remains qualified. If accounting cannot be closed, the auditor is
+# disqualified before it can render judgment on anything else.
+#
+# ==============================================================================
 """
 UHCR — ISOLATED RESOURCE FAIL-CLOSED AUDITOR (STATIC + selective dynamic)
 ==========================================================================
