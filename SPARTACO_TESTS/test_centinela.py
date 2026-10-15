@@ -1,21 +1,160 @@
-# =========================================================================
-
+# ===========================================================================
 # SPARTACO-SECURITY — tests/test_centinela.py
-
-# =========================================================================
-
+# ===========================================================================
 #
-
-# Supervision of core.centinela.Centinela
-
-# Public surface of the Engine: status, registration, start_errors,
-
+# SUPERVISION OF core.centinela.Centinela
+#
+# Public surface of the Engine: status, registry, startup errors,
 # execute_capacity.
-
 #
-
-# =========================================================================
-
+# WHAT THIS FILE DOES
+# ---------------------------------------------------------------------------
+# It audits the Sentinel, the component that supervises the Engine. It
+# verifies that the Sentinel detects the Engine's state, classifies the
+# verdict correctly, escalates the response monotonically, and does not
+# confuse detection with containment, containment with isolation,
+# isolation with handover, or handover with recovery.
+#
+# THE THREE PIECES
+# ---------------------------------------------------------------------------
+#   HostileEngine   Mimics the public surface of the real Engine but can
+#                   be programmed to attack in specific ways: lie about
+#                   its state, fake success for unknown capabilities,
+#                   throw on execution, change state at runtime, expose
+#                   non-callable capabilities, produce side effects
+#                   during inspection.
+#
+#   Oracle          Classifies the Sentinel's verdicts into three
+#                   observable states: retained, observed, approved.
+#                   Also reads the Sentinel's state to check containment,
+#                   handover availability and external isolation
+#                   requirement.
+#
+#   AttackRunner    Runs each attack in isolation, captures exceptions,
+#                   accumulates results, and computes a global verdict.
+#
+# THE CASCADE OF OUTCOMES
+# ---------------------------------------------------------------------------
+# Every attack declares an expected level, and that level determines
+# which subset of conditions must hold:
+#
+#   DETECTAR    detected
+#   CONTENER    detected AND contained
+#   AISLAR      detected AND contained AND isolated
+#   RELEVAR     detected AND contained AND relieved
+#   RECUPERAR   detected AND recovered
+#   BLOQUEAR    detected AND contained AND blocked
+#
+# The cascade is monotonic: you cannot isolate without having contained,
+# and you cannot contain without having detected. This formalizes the
+# escalated-response doctrine. A global verdict cannot collapse two
+# distinct levels into one.
+#
+# THE TWENTY-FOUR ATTACKS
+# ---------------------------------------------------------------------------
+# Absence and anomalous states:
+#   engine_absent               no invocador -> retained
+#   engine_rejected             Engine RECHAZADO -> retained
+#   engine_degraded             Engine DEGRADADO -> observed
+#
+# Registry problems:
+#   empty_registry              empty registry -> retained
+#   missing_required_role       SC role missing -> retained
+#   missing_product_role        UI role missing -> observed
+#   non_callable_capability     declared capability not callable -> retained
+#   fake_success_unknown_cap    Engine fakes success for unknown cap -> retained
+#   engine_lies_about_state     OPERATIVO with pending startup errors -> retained
+#   runtime_state_failure       Engine becomes RECHAZADO at runtime -> retained
+#   execution_failure           Engine raises during probe -> detected
+#
+# Containment and handover:
+#   explicit_containment        Sentinel ordered to contain -> isolated
+#   handover                    handover plan with
+#                               ejecuta_engine=False -> relieved
+#   recovery_rejected_engine    recovery with rejected Engine -> retained
+#   successful_recovery         recovery after restore -> approved
+#   retained_package            package RETENIDO -> retained
+#   observed_package_cannot_promote  package OBSERVADO -> not approved
+#   repeatability               same package, same verdict
+#   execution_after_containment post-containment execution -> blocked
+#
+# Specific failure modes:
+#   hostile_capability_side_effect  Sentinel does not execute hostile
+#                                   capabilities during inspection
+#   missing_dependency          nonexistent dependency -> detected
+#   unknown_permission          non-canonical permission -> detected
+#   unknown_engine_state        Engine reports a state that does not
+#                               exist -> retained
+#   recovery_cannot_force_authorization  preparar_recuperacion() must
+#                               declare autorizacion_automatica=False
+#
+# THE FINAL ASSERTIONS
+# ---------------------------------------------------------------------------
+#   test_centinela_supervision
+#       runs the full battery and requires the global verdict to be PASS
+#
+#   test_centinela_no_puede_autodeclararse_exitoso
+#       in no case may the Sentinel declare containment without marking
+#       aislamiento_externo_requerido. Coherence between the containment
+#       claim and its operational consequences.
+#
+#   test_centinela_recovery_is_not_magic
+#       if the Engine remains RECHAZADO, recovery must not approve
+#
+# WHY A HOSTILE ENGINE AND NOT THE REAL ONE
+# ---------------------------------------------------------------------------
+# A test that used the real Engine could not inject anomalous states
+# without modifying the Engine, which would violate the no-production-
+# code-touch doctrine. HostileEngine mimics the public surface exactly
+# (same attribute names, same ejecutar_capacidad signature, same state
+# and errores_arranque fields) and offers additional controls to
+# program attacks. This is the standard solution for testing
+# supervisors: simulate the supervised object to inject behaviors the
+# real object would not spontaneously produce. The no-production-code
+# doctrine is preserved because the real Engine is never touched, and
+# the Sentinel is exercised against a double that respects its
+# contract.
+#
+# WHAT THIS FILE IS NOT
+# ---------------------------------------------------------------------------
+#   - It is not a cryptographic audit.
+#   - It is not a metadata audit.
+#   - It is not a metrological qualification of any instrument.
+#   - It does not certify the whole system: it certifies the supervisor
+#     that watches the Engine.
+#
+# ROLE IN THE SUITE
+# ---------------------------------------------------------------------------
+# The adversarial files attack individual modules. The metrological
+# kernel audits instruments. The integration smoke test checks the
+# honest path. The monitor correlates observation. The fail-closed
+# auditor qualifies itself against synthetic controls. The universal
+# closure verifies verified == loaded == executed. The transition
+# auditor measures state changes. The RAW causal boundary auditor
+# audits the Engine-provider boundary. The UI auditor verifies the
+# user can recover and download. The rotation suite covers the full
+# lifecycle of a link. The unified hard audit merges the five fronts
+# into a single CI entry. The DVC calibration qualifies the audit
+# motor. The canon/man customs invariants audit the protection module's
+# canonicalization and manifest shape. This file audits the Sentinel
+# that supervises the Engine. If something goes wrong in the Engine,
+# the Sentinel is the first line of defense that must detect it and
+# act. Without this file, the system could have a robust Engine and a
+# blind supervisor, and the whole would fail silently when it matters
+# most.
+#
+# PRINCIPLE
+# ---------------------------------------------------------------------------
+# Detection is not containment. Containment is not isolation.
+# Isolation is not handover. Handover is not recovery. Recovery is not
+# authorization. Each level of response presupposes the previous ones,
+# and a global verdict cannot collapse two distinct levels into one. A
+# supervisor that declares containment without declaring the
+# operational consequences of containment is not supervising; it is
+# performing supervision. This file verifies that the Sentinel performs
+# it for real.
+#
+# ===========================================================================
 from __future__ import annotations
 
 import copy
