@@ -1,13 +1,95 @@
-# tests/test_probe_deeper.py
-"""
-Pruebas adicionales dirigidas a las áreas de mayor incertidumbre:
- - AntiHackValidation (engine) — ciclos, manifiesto, pub_bytes, artefacto
- - Centinela — ausencia de Engine, grafos incompletos, capacidades no-callable
- - Launcher — carga de manifiesto corrupto, modos inválidos, ausencia de archivos
- - Arranque — empaquetado/desempaquetado frontera: rutas duplicadas y traversal
- - Vinculacion — registrar/rotar/revocar atomicidad y semántica
- - Generador de claves: generación mínima (sanity)
-"""
+# ===========================================================================
+# SPARTACO-SECURITY — tests/test_probe_deeper.py
+# ===========================================================================
+#
+# DEEPER PROBE — TARGETED TESTS FOR HIGH-UNCERTAINTY AREAS
+# ---------------------------------------------------------------------------
+#
+# Additional tests directed specifically at the areas where the system's
+# behavior is least predictable and where the boundaries between components
+# are least clear. This is not an exhaustive battery and not a random one:
+# each test is selected because it pins a known decision or a boundary
+# condition that the main suite does not cover.
+#
+# AREAS COVERED
+# ---------------------------------------------------------------------------
+#
+#   AntiHackValidation (engine)
+#       - reference cycle detection
+#       - manifest structure: extra keys, wrong cuerpo type, empty firma
+#       - pub_bytes and artifact validation: wrong type, wrong length,
+#         empty inputs
+#
+#   Centinela
+#       - absence of Engine leads to contention and RETENIDO, not to a
+#         permissive state
+#       - non-callable declared capability is detected and reported with
+#         MOTIVO_CAPACIDAD_NO_CALLABLE
+#       - module with no declared capabilities is detected as a contract
+#         gap and reported
+#
+#   Launcher
+#       - malformed manifest JSON is rejected with a code-level concept
+#       - missing artifact -> ARTEFACTO_AUSENTE
+#       - missing manifest -> MANIFIESTO_AUSENTE
+#       - invalid mode -> MODO_INVALIDO
+#
+#   Arranque (packaging boundary)
+#       - duplicate routes in a package body are rejected by _desempaquetar
+#       - path traversal entries (../escape) are ACCEPTED and preserved
+#         as-is: the unpacker is a reader, not a guard. Path validation
+#         belongs to a higher layer. This test fixes that design decision
+#         in executable form.
+#
+#   Generador de claves (sanity)
+#       - 32-byte private and public keys are produced
+#       - Ed25519 round-trip: sign with private, verify with public
+#
+#   Vinculacion
+#       - register -> read -> rotate -> read -> revoke -> read
+#       - rotation increments generation by exactly one
+#       - revocation sets revocado=True
+#
+# POSTURE
+# ---------------------------------------------------------------------------
+#
+# Unlike the adversarial, metrological and auditing files in this suite,
+# this is a traditional pytest file. It uses pytest.raises, tmp_path and
+# anonymous mock objects. It does not persist evidence, does not qualify
+# an instrument and does not run a Monte Carlo. Its value is its surgical
+# selection of boundaries: each test pins a specific decision so that a
+# refactor that moves the boundary will fail a test.
+#
+# WHAT THIS FILE DOES NOT DO
+# ---------------------------------------------------------------------------
+#
+#   - It does not attack credencial.py or perimeter.py.
+#   - It does not measure resistance under hostile cryptographic input.
+#   - It does not audit a resource end to end.
+#   - It does not observe the system from inside (that is the monitor's
+#     role).
+#   - It does not verify that the honest end-to-end path works (that is
+#     the integration smoke test's role).
+#
+# ROLE IN THE SUITE
+# ---------------------------------------------------------------------------
+#
+# The adversarial files test whether the system resists hostile input.
+# The metrological kernel tests whether the instruments are trustworthy.
+# The integration smoke test checks the honest end-to-end path. The
+# monitor correlates external and internal observation. The fail-closed
+# auditor qualifies itself against synthetic controls before measuring a
+# resource. This file closes gaps at the boundaries: cycles, manifest
+# shape, non-callable capabilities, missing files, invalid modes,
+# duplicate routes, path traversal, key round-trip, atomic lifecycle.
+#
+# PRINCIPLE
+# ---------------------------------------------------------------------------
+# Not every test needs to be an instrument. Some tests just need to pin
+# a boundary. This file pins nine boundaries the rest of the suite does
+# not reach, with no ceremony and no over-engineering.
+#
+# ===========================================================================
 from __future__ import annotations
 
 import json
