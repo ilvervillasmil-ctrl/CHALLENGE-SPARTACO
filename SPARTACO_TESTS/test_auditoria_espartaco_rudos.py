@@ -1,23 +1,218 @@
-"""AUDITORÍA RUDOS UNIFICADA — un solo test para el workflow e2e.yml.
-
-Funde en un único archivo de pruebas (recogido por pytest) los cinco frentes
-adversariales de SPARTACO, sin debilitar ninguno:
-
-  R1  E2E de integración real contra el dispatcher (subproceso aislado,
-      HOME propio, sin mocks de éxito; espías sobre autoridades reales).
-  R2  Barrido anti-sabotaje del repositorio completo (Unicode/Trojan Source,
-      criptografía fuera de autoridad, reasignación de autoridades).
-  R3  Autocalibración del auditor antisabotaje con falsificaciones sintéticas.
-  R4  Arquitectura estricta SC -> USER -> Spartaco_UI -> UI3 (baseline con
-      pin SHA-256, biyección catálogo/backend, delegación a autoridades).
-  R5  La cara (UI3) no interpreta credenciales ni cifra en el navegador.
-
-Soporte (no son tests, son instrumentos): espartaco_anti_sabotaje.py,
-_auditoria_espartaco_integracion.py, auditoria_espartaco_motor.py,
-contrato_original_espartaco.json.
-
-Nunca sustituye a la suite original: la acompaña. Sin mocks de éxito.
-"""
+# ===========================================================================
+# SPARTACO-SECURITY — tests/test_auditoria_espartaco_rudos.py
+# ===========================================================================
+#
+# UNIFIED HARD AUDIT — single test file for the e2e.yml workflow
+#
+# WHAT THIS FILE DOES
+# ---------------------------------------------------------------------------
+# It merges into a single test file (collected by pytest) the five
+# adversarial fronts of SPARTACO, without weakening any of them:
+#
+#   R1  Real E2E integration against the dispatcher
+#       (isolated subprocess, own HOME, no success mocks, spies on real
+#       authorities)
+#
+#   R2  Anti-sabotage sweep of the entire repository
+#       (Unicode / Trojan Source, cryptography outside authority,
+#       reassignment of authorities)
+#
+#   R3  Self-calibration of the anti-sabotage auditor with synthetic
+#       falsifications
+#
+#   R4  Strict architecture chain
+#       SC -> USER -> Spartaco_UI -> UI3
+#       (baseline pinned by SHA-256, catalog/backend bijection,
+#       delegation to authorities, preservation of original
+#       capabilities, fail-closed dispatcher)
+#
+#   R5  The face (UI3) does not interpret credentials and does not
+#       encrypt in the browser
+#
+# SUPPORT INSTRUMENTS (not tests)
+# ---------------------------------------------------------------------------
+# The file loads two support modules with importlib.util, so it does
+# not depend on PATH or sys.path:
+#
+#   espartaco_anti_sabotaje.py     anti-sabotage scanner
+#   auditoria_espartaco_motor.py   AST audit motor (crypto_violations,
+#                                  divergencias_baseline,
+#                                  extra_in_catalog, find_js_functions,
+#                                  get_call_names, load_baseline,
+#                                  unregistered_public)
+#
+# And it reads a baseline contract:
+#
+#   contrato_original_espartaco.json
+#
+# The baseline pins the original state of the system against which
+# every preservation check is verified.
+#
+# IT NEVER REPLACES THE ORIGINAL SUITE
+# ---------------------------------------------------------------------------
+# This file accompanies the original suite, it does not substitute it.
+# It adds no success mocks. Every verification runs against the real
+# dispatcher, the real backend, the real user adapter, the real UI.
+#
+# R1 — REAL E2E
+# ---------------------------------------------------------------------------
+# test_rudos_01 runs _auditoria_espartaco_integracion.py in an
+# isolated subprocess with its own HOME, SPARTACO_AUDIT_ISOLATED
+# pointing to a temporary directory, and PYTHONPATH set to the repo
+# root. The subprocess exercises the real flow of alta, cierre and
+# apertura against the true modules, and executes real attacks
+# internally. The test expects return code 0 and the string
+# ESPARTACO_E2E=PASS in stdout.
+#
+# R2 — ANTI-SABOTAGE SWEEP
+# ---------------------------------------------------------------------------
+# test_rudos_02 calls scanner.scan_repo(ROOT) and requires zero
+# findings of severity BLOQUEO. Every blocking finding is enumerated
+# with its code, file, line, column and detail. The scanner detects:
+#
+#   Unicode bidi overrides (U+202E, U+2066, ...)
+#   invisible characters (U+200B, U+00AD, U+FEFF)
+#   Unicode separators (U+2028)
+#   control characters (U+0000)
+#   non-characters (U+FFFF)
+#   invalid UTF-8
+#   homoglyph identifiers (mixed scripts)
+#   UTF-8 BOM
+#   duplicate public definitions
+#   reassigned authorities in runtime
+#   unconditional-success gates
+#   dynamic execution in the coordinator
+#   parallel cryptography outside authority
+#   homoglyph paths
+#
+# R3 — SELF-CALIBRATION OF THE SCANNER
+# ---------------------------------------------------------------------------
+# Tests 03 through 17 calibrate the scanner against synthetic
+# falsifications and against legitimate Spanish text:
+#
+#   test_rudos_03   eight Unicode code points must be detected
+#   test_rudos_04   invalid UTF-8 is not ignored
+#   test_rudos_05   confusable identifiers are detected
+#   test_rudos_06   UTF-8 BOM is detected
+#   test_rudos_07   legitimate Spanish is not a false positive
+#   test_rudos_08   new cryptography in user.py is detected
+#   test_rudos_09   legitimate cryptography in credencial.py is
+#                   not persecuted
+#   test_rudos_10   duplicate public definitions are detected
+#   test_rudos_11   authority reassignment is detected
+#   test_rudos_12   unconditional-success gate is detected
+#   test_rudos_13   dynamic execution in user.py is detected
+#   test_rudos_14   the scanner does NOT execute the code it
+#                   inspects (a file that would write a marker to
+#                   disk, if executed, does not create the marker)
+#   test_rudos_15   homoglyph paths are detected
+#   test_rudos_16   fail-closed when the repository does not exist
+#   test_rudos_17   the CLI rejects a synthetic real attack with
+#                   exit code 1 and the finding code in stdout
+#
+# R4 — STRICT ARCHITECTURE CHAIN
+# ---------------------------------------------------------------------------
+# Tests 18 through 32 verify that the chain SC -> USER ->
+# Spartaco_UI -> UI3 preserves the baseline and does not introduce
+# parallel implementations:
+#
+#   test_rudos_18   all original backend capabilities are preserved
+#   test_rudos_19   catalog is a bijection with the real backend
+#                   (the test explicitly warns: "do not hide or
+#                   remove capabilities to make this test pass")
+#   test_rudos_20   every catalogued capability resolves to a
+#                   callable, its signature is inspectable, and the
+#                   catalog's fields are real signature parameters
+#                   (no invented fields)
+#   test_rudos_21   the new gate USER.entrar_con_paquetes is
+#                   published across the whole chain: declared in
+#                   Spartaco_SEGURIDAD, catalogued in CAPA, present
+#                   in CAPACIDADES_USER, exported in __all__,
+#                   signature exactly {alias, paquete_priv,
+#                   paquete_kit, dispositivo_id}, transports set to
+#                   T_BYTES, visible to the user, resolvable by the
+#                   dispatcher
+#   test_rudos_22   user.py and the UI do not contain parallel
+#                   cryptography
+#   test_rudos_23   no original USER operation has disappeared
+#   test_rudos_24   user.py delegates to CredencialUser or
+#                   CREDENCIAL (verified by AST call names)
+#   test_rudos_25   dispatcher denies an unpublished action without
+#                   invoking it (fail-closed at the dispatcher)
+#   test_rudos_26   dispatcher does not allow skipping the view
+#                   authorization
+#   test_rudos_27   original portada, logo, renders and routes are
+#                   preserved
+#   test_rudos_28   essential UI3 JavaScript functions are preserved
+#   test_rudos_29   only the backend makes cryptographic decisions;
+#                   no crypto.subtle, AESGCM, Fernet or CryptoJS in
+#                   interfaz_3.py
+#   test_rudos_30   double check of authority and publication: every
+#                   authority is declared in the inventory, resolves
+#                   to a callable, and internal capabilities like
+#                   resolver_clave are callable
+#   test_rudos_31   the auditor detects crypto imports, aliases and
+#                   runtime construction (four malicious mutants
+#                   plus one clean case)
+#   test_rudos_32   the auditor detects mutations of inventory and
+#                   catalog (removed capability, unregistered public,
+#                   invented catalog entry)
+#
+# R5 — THE FACE DOES NOT DO BACKEND WORK
+# ---------------------------------------------------------------------------
+# Tests 33 through 35 verify that UI3 transmits documents without
+# local decryption, that the create and save functions recognize
+# both packets, and that no UI file performs parallel cryptography:
+#
+#   test_rudos_33   ui3Entrar reaches USER.entrar_con_paquetes and
+#                   does not call ui3PrivDe, ui3LeerKit or
+#                   ui3AbrirTarjeta
+#   test_rudos_34   ui3Alta and ui3GuardarPieza recognize
+#                   paquete_priv and paquete_kit, and the public key
+#                   is downloadable
+#   test_rudos_35   no file under modules/interfaz/ contains
+#                   crypto.subtle.encrypt/decrypt/deriveKey/sign or
+#                   CryptoJS.AES/DES/PBKDF2
+#
+# WHAT THIS FILE IS NOT
+# ---------------------------------------------------------------------------
+#   - It is not a replacement for the original suite; it accompanies
+#     it.
+#   - It does not use success mocks; every verification runs against
+#     the real dispatcher, backend, user adapter and UI.
+#   - It does not weaken any of the five fronts by merging them into
+#     one file.
+#   - It does not certify the whole system: it certifies that the
+#     five fronts, run together, hold on the current repository.
+#
+# ROLE IN THE SUITE
+# ---------------------------------------------------------------------------
+# The adversarial files attack one module. The metrological kernel
+# audits instruments. The integration smoke test checks the honest
+# path. The monitor correlates observation. The fail-closed auditor
+# qualifies itself against synthetic controls. The universal closure
+# verifies verified == loaded == executed. The transition auditor
+# measures state changes. The RAW causal boundary auditor audits the
+# Engine-provider boundary. The UI auditor verifies the user can
+# recover and download. The rotation suite covers the full lifecycle
+# of a link. This file is the administrative consolidation: it runs
+# the five most important adversarial fronts of the whole project in
+# a single pytest collection so the CI workflow e2e.yml can verify,
+# in one shot, that the motor works, the repository is clean, the
+# auditor detects what it must detect, the strict architecture chain
+# is preserved, and the UI face does not do backend work.
+#
+# PRINCIPLE
+# ---------------------------------------------------------------------------
+# The five fronts are independent properties of the same system. The
+# motor must work. The repository must be free of hidden attacks. The
+# auditor must detect what it must detect and must not execute the
+# code it inspects. The chain must preserve the baseline. The face
+# must not do backend work. Merging them into a single file for the
+# CI workflow does not merge them into a single property: each front
+# keeps its own failures, its own diagnostics and its own evidence.
+#
+# ===========================================================================
 from __future__ import annotations
 
 import base64
