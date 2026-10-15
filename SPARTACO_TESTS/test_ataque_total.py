@@ -1,40 +1,39 @@
 """
-SPARTACO-SECURITY — campaña de ataque total con atribución defensiva
-===================================================================
+SPARTACO-SECURITY — Full-scale attack campaign with defensive attribution
+=======================================================================
 
-Objetivo
---------
-Ejecutar, sin modificar el backend ni fabricar mecanismos de defensa, las pruebas
-existentes del repositorio y producir una autopsia que responda:
+Objective
+---------
+Execute the existing tests in the repository—without modifying the backend or creating new defense mechanisms—and 
+produce an "autopsy" that answers the following:
 
-    1) qué prueba se ejecutó,
-    2) qué componente(s) reales del programa fueron ejercitados,
-    3) qué componente puede atribuirse como defensor primario cuando la evidencia
-       del propio test lo permite,
-    4) qué hizo la defensa según el resultado observable del test,
-    5) qué pasó finalmente.
+    1) Which test was executed?
+    2) Which actual program components were exercised?
+    3) Which component can be identified as the primary defender (based on evidence from the test itself)?
+    4) How did the defense respond, according to the observable test outcome?
+    5) What was the final result?
 
-Reglas de fidelidad
--------------------
-- No inventa defensores: la atribución se deriva de imports reales del test.
-- No cambia código de producción.
-- No describe procedimientos ofensivos ni genera payloads nuevos.
-- Reutiliza únicamente pruebas ya presentes en el repo.
-- Un PASS valida la propiedad exigida por ese test; no se presenta como una
-  prueba universal de ausencia de vulnerabilidades.
-- Si la atribución no es inequívoca, se informa INDETERMINADO.
+Fidelity Rules
+--------------
+- No "invented" defenders: attribution is derived solely from the actual imports used in the test.
+- No modifications to production code.
+- No description of offensive procedures; no generation of new payloads.
+- Only tests already present in the repository are used.
+- A "PASS" result validates the specific property required by that test; it does not serve as a universal 
+guarantee that no vulnerabilities exist.
+- If the attribution is not clear-cut, it is reported as "INDETERMINATE."
 
-Salidas
+Outputs
 -------
     diagnostics/SPARTACO_ATAQUE_TOTAL_REPORT.json
     diagnostics/SPARTACO_ATAQUE_TOTAL_REPORT.md
 
-Ejecución
+Execution
 ---------
     pytest -q tests/test_spartaco_ataque_total_atribucion.py -s
 
-El test lanza pytest en subprocesos sobre los demás archivos de tests para evitar
-recursión y mantener aislada la campaña.
+The test suite launches `pytest` in sub-processes to run the other test files;
+this prevents recursion and ensures the campaign remains isolated.
 """
 
 from __future__ import annotations
