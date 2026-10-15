@@ -1,35 +1,155 @@
-# ===============================================================
-# tests/test_proteccion_adversarial.py
+# ===========================================================================
+# SPARTACO-SECURITY — tests/test_proteccion_adversarial.py
 # VPSI-TRUTH — PROTECCION 3.1
+# ===========================================================================
 #
-# BATERÍA ADVERSARIAL
+# ADVERSARIAL BATTERY — DECLARED CONTRACT
+# ---------------------------------------------------------------------------
 #
-# Importante:
-#   La implementación real vive en:
+# The real implementation lives in:
+#     modules/spartaco_seguridad/proteccion.py
 #
-#       modules/spartaco_seguridad/proteccion.py
+# The authorized manifest is EXCLUSIVELY:
+#     {
+#         "cuerpo": {...},
+#         "firma":  "..."
+#     }
 #
-#   El manifiesto autorizado es EXCLUSIVAMENTE:
+# The following are NOT accepted under any circumstance:
+#     - absent manifests
+#     - loose signatures in PROTEGIDO mode
+#     - altered bodies
+#     - altered signatures
+#     - altered artifacts
+#     - wrong public keys
+#     - regressive versions
+#     - parallel fields
+#     - extra fields
+#     - external references that contradict the authenticated body
 #
-#       {
-#           "cuerpo": {...},
-#           "firma": "..."
-#       }
+# THESIS
+# ---------------------------------------------------------------------------
+# This is the base adversarial battery for proteccion.py. It declares
+# the contract at the top and then verifies, block by block, that each
+# clause holds under systematic attack. It is the file to read first
+# and the reference when someone needs to know what proteccion.py
+# actually guarantees.
 #
-#   No se aceptan:
-#       - manifiestos ausentes
-#       - firmas sueltas en PROTEGIDO
-#       - cuerpos alterados
-#       - firmas alteradas
-#       - artefactos alterados
-#       - claves públicas incorrectas
-#       - versiones regresivas
-#       - campos paralelos
-#       - campos extra
-#       - referencias externas que contradigan el cuerpo autenticado
+# It is NOT the demolition battery. That file (test_proteccion_
+# adversarial_demolicion.py) adds metrological doctrine on top of this
+# one: crash-as-failure discipline, TOCTOU, aliasing, concurrency,
+# Ed25519 non-canonical S forms, numeric canonicalization diagnostics.
+# This file is the declared contract; the other file is the layered
+# architectural pressure on the same module.
 #
-# ===============================================================
-
+# STRUCTURE — 38 BLOCKS
+# ---------------------------------------------------------------------------
+#
+#   1  Happy path: valid build, verification ok=True, empty fallos,
+#      internal steps manifiesto / nucleo / canales all green.
+#   2  Fail-closed: missing manifest, six malformed manifest shapes,
+#      missing pub, wrong pub, all rejected with "manifiesto" in
+#      fallos and the appropriate concepto.
+#   3  Body mutation: each of the 14 declared fields mutated according
+#      to its type, plus full body replacement, plus signature reuse
+#      over a different body. All must break.
+#   4  Artifact mutation: byte at 0, middle, tail, append, pop, edge
+#      positions. All must fail under "nucleo" and, where applicable,
+#      "canales", with concepto INTEGRIDAD_COMPROMETIDA.
+#   5  Signature: one-nibble flip, seven malformed shapes (empty, two
+#      chars, non-hex, 128 zeros, extra chars, single char, short hex).
+#      All must fail with FIRMA_INVÁLIDA.
+#   6  Public key: five wrong lengths, plus a valid 32-byte key from a
+#      different key pair. All must fail with FIRMA_INVÁLIDA.
+#   7  Canonicalization: key reordering does not break the signature;
+#      value change with the same type does; serializer is
+#      deterministic; serialization changes on semantic change.
+#   8  Version: signed regressive version rejected with
+#      VERSIÓN_REGRESIVA; signed higher version accepted. Signed is
+#      not the same as authorized.
+#   9  n_neutro: authenticated value is not overridden by an external
+#      n_neutro argument.
+#  10  z / neutro: evidence, never authority. Present in steps, absent
+#      from fallos. Mutating valuaciones breaks body authentication.
+#  11  Diagnostic: relaxes the manifest requirement, not its validity.
+#  12  Fragmentation: 81 values of n and 11 values of k, exact byte
+#      coverage and exact length sum.
+#  13  Direct crypto API: firmar / verificar round-trip; signature not
+#      reusable for another message; signing with a nonexistent key
+#      fails with CÓDIGO_INVÁLIDO.
+#  14  Direct manifest: verificar_manifiesto valid returns the body;
+#      invalid types, missing cuerpo, missing firma, flat field, extra
+#      key, extra cuerpo, signature as list, cuerpo as list — all
+#      rejected.
+#  15  Manifest structure: eliminating cuerpo, eliminating firma,
+#      cuerpo not dict, firma not string — all rejected.
+#  16  Body consistency: n_bytes must match the artifact;
+#      identidad_neutra and n_neutro authenticated values cannot be
+#      modified.
+#  17  Manifest A != Artifact B: cross-manifest does not authenticate;
+#      failure under "nucleo" and "canales".
+#  18  Regression: the build signature is the signature of the BODY,
+#      not of the artifact digest.
+#  19  Conflicting external references: nucleo_esperado, S_esperado,
+#      Q_esperado all zero while the manifest is valid — verification
+#      still passes, because the authenticated body is authority.
+#  20  Massive artifact mutation: byte at 0, 1, n/4, n/2, 3n/4, n-2,
+#      n-1 — all detected under "nucleo".
+#  21  Body replacement attack: attacker without private key cannot
+#      sign; the attempt fails.
+#  22  Extreme data: empty, single byte, 0x00, 0xFF, 3, 7, 8, 9, 100,
+#      1000, 10000 bytes — build and verify all ok.
+#  23  Invalid n_neutro: -100, -1, 0, 1 — all fail with CÓDIGO_INVÁLIDO.
+#  24  Schema: signed incompatible schema fails.
+#  25  Algorithms: mutated algoritmo_hash and algoritmo_firma break the
+#      signature.
+#  26  Artifact identity: artifact_id and clave_publica_id cannot be
+#      replaced.
+#  27  Full chain: original ok, byte flip fails under "nucleo".
+#  28  No bypass with loose firma_hex in PROTEGIDO.
+#  29  Two builds do not share authorization; cross-manifest fails.
+#  30  Final fail-closed: four insufficient manifests, all rejected.
+#  31  JSON order is not part of the signature.
+#  32  Signature cannot be transplanted from one body to another.
+#  33  Every signature position mutated fails.
+#  34  Public key with correct 32-byte length but different bytes
+#      fails with FIRMA_INVÁLIDA.
+#  35  Deleting any authenticated body field breaks the signature.
+#  36  Additional structural attacks: extra firma, extra cuerpo, firma
+#      as list, cuerpo as list.
+#  37  Mode type: PROTEGIDO is fail-closed even with firma_hex present.
+#  38  Cross authentication: correct signature with wrong data does not
+#      authorize; same signed body with different data fails.
+#
+# POSTURE
+# ---------------------------------------------------------------------------
+# A traditional adversarial battery. No metrological doctrine, no
+# calibration, no accounting, no crash-as-failure discipline. The
+# contract is declared at the top; the 38 blocks are executable
+# verifications of that contract. The demolition file adds layers on
+# top; this file is the base declaration that says what is being
+# attacked.
+#
+# ROLE IN THE SUITE
+# ---------------------------------------------------------------------------
+# The credential red-teams attack credencial.py. The metrological
+# kernel audits the instruments. The integration smoke test checks the
+# honest path. The monitor correlates external and internal
+# observation. The fail-closed auditor qualifies itself against
+# synthetic controls. The seal closure test verifies that declared
+# algebra is physically operated. The demolition battery piles layered
+# architectural pressure on proteccion.py. This file is the base
+# adversarial battery that declares the manifest contract and verifies
+# it clause by clause across 38 blocks.
+#
+# PRINCIPLE
+# ---------------------------------------------------------------------------
+# A contract that is not attacked is a hope. This file writes the
+# contract down, then attacks it in 38 blocks, requiring each clause
+# to hold with the correct failure node and the correct concepto
+# whenever it is violated.
+#
+# ===========================================================================
 from __future__ import annotations
 
 import copy
