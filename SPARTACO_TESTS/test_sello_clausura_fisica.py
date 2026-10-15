@@ -1,11 +1,130 @@
-#==============================================================
-# tests/test_sello_clausura_fisica.py
+# ===========================================================================
+# SPARTACO-SECURITY — tests/test_sello_clausura_fisica.py
+# ===========================================================================
 #
-# Oficio, no vocabulario.
-# No busca la cadena "ALPHA".
-# No parchea atributos en RAM.
-# El CI mide bytes, módulos y mitades.
-# ==============================================================
+# CRAFT, NOT VOCABULARY
+# ---------------------------------------------------------------------------
+# This file does not search for the string "ALPHA" in the source code.
+# It does not patch attributes in RAM to force a result.
+# The CI measures bytes, modules and halves — nothing else.
+#
+# THESIS
+# ---------------------------------------------------------------------------
+# Declaring an algebraic architecture is not the same as operating it.
+# The cube declares a partition (3 divisions per axis, 27 cells, 26
+# exterior, 1 center, ALPHA = 26/27, BETA = 1/27). That algebra is
+# coherent in the constants module. It is NOT guaranteed to be the
+# algebra that the sealing function actually uses when it produces
+# bytes. This file closes that gap by measuring the REAL bytes the
+# sealing produces and verifying that they satisfy the modular
+# property of the axis. It is the difference between declaring an
+# architecture and operating it.
+#
+# WHAT THIS FILE IS
+# ---------------------------------------------------------------------------
+# A closure test. It verifies correspondence between two levels of the
+# architecture and requires that they match:
+#
+#   * algebraic constants of the cube  <->  bytes produced by the seal
+#   * API defaults (measured via inspect.signature)  <->  declared
+#     constant of the axis
+#   * signed body fields  <->  channels derived from the sealed payload
+#   * legitimate material  <->  document opens
+#   * alien material  <->  document does not open
+#   * one-byte mutation  <->  document does not open
+#   * partial secret injection  <->  document does not open
+#
+# It does NOT search by symbol name. It measures effective values: the
+# actual default stored on the function object, the actual hash of the
+# actual bytes, the actual modular residue. Renaming the constant does
+# not change the test; changing its value does.
+#
+# TESTS
+# ---------------------------------------------------------------------------
+#   test_050  cube partition: divisions per axis, total, exterior,
+#             center, ALPHA and BETA as Fraction, ALPHA + BETA == 1
+#             exactly (not as floating-point approximation).
+#
+#   test_051  the seal uses the axis of the cube. Reads the actual
+#             defaults of P.sellar(n) and C.proteger(n_neutro) via
+#             inspect.signature and requires both to equal
+#             DIVISIONS_PER_AXIS. Coupled to the effective value, not
+#             to the symbol name.
+#
+#   test_052  the seal closes the modulo of the axis. For nine distinct
+#             payloads across three cycles, seals each one, hashes the
+#             resulting bytes, requires the integer hash to be exactly
+#             divisible by the number of divisions per axis, and
+#             requires verificar_neutro to accept the same blob. The
+#             physical closure of the algebraic property over the
+#             actual bytes.
+#
+#   test_053  the signed body signs the axis. Builds a body from a
+#             sealed payload, requires cuerpo["n_neutro"] to equal
+#             DIVISIONS_PER_AXIS, and requires the S and Q channels
+#             declared in the body to equal the ones returned by the
+#             channels function on the same sealed payload.
+#
+#   test_054  end-to-end legitimate path: with secrets derived from a
+#             known label, the document opens and the plaintext
+#             matches.
+#
+#   test_055  alien material does not open: the same blob with wrong
+#             authentication material is rejected without exposing a
+#             plaintext.
+#
+#   test_056  a single-byte flip does not open.
+#
+#   test_057  a single injection does not open: passing only the
+#             authentication secret, or only the session secret, is
+#             rejected in both cases. Both secrets are mandatory.
+#
+# DESIGN NOTES
+# ---------------------------------------------------------------------------
+#   * inspect.signature is used to read the effective default value,
+#     not to read source text.
+#   * The modular property is checked on real bytes, not on
+#     intermediate symbolic values.
+#   * Nine payloads (three cycles of three) cover all equivalence
+#     classes modulo three, so the modular property cannot pass by
+#     accident on a single case.
+#   * Fractions are used, not floats, so the sum of ALPHA and BETA is
+#     checked for exact equality.
+#   * The tests are few because the property is structural, not
+#     statistical. No parameterisation is needed to make the point.
+#
+# WHAT THIS FILE IS NOT
+# ---------------------------------------------------------------------------
+#   - It is not adversarial: it does not try to break the module.
+#   - It is not metrological: it does not qualify its own instrument.
+#   - It is not an audit of an isolated resource.
+#   - It does not certify the whole system: it certifies that a
+#     declared algebraic architecture is physically operated by the
+#     bytes the system produces.
+#
+# ROLE IN THE SUITE
+# ---------------------------------------------------------------------------
+# The adversarial battery attacks the layered architecture of
+# proteccion.py. The credential red-teams attack credencial.py. The
+# metrological kernel audits the instruments. The integration smoke
+# test checks the honest end-to-end path. The monitor correlates
+# external and internal observation. The fail-closed auditor qualifies
+# itself against synthetic controls. This file closes the loop between
+# declared algebra and produced bytes: it verifies that what the
+# architecture says about the cube is what the system does, in bytes,
+# without searching for names and without forcing memory.
+#
+# PRINCIPLE
+# ---------------------------------------------------------------------------
+# An architecture that declares algebra and does not operate it is
+# decorative. A test that searches for a symbol name confirms
+# vocabulary, not behaviour. A test that patches memory confirms
+# nothing. This file measures the effective default, the produced
+# bytes, the modular residue, the derived channels and the mandatory
+# secrets, and requires each of them to match what the architecture
+# declares. Craft, not vocabulary.
+#
+# ===========================================================================
 
 from __future__ import annotations
 
